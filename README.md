@@ -38,15 +38,17 @@ Người dùng có thể tạo nhóm, thêm chi tiêu và ứng dụng sẽ **t�
 
 ## 📦 Cấu trúc thư mục (gợi ý)
 
+```bash
 split-bill-tracking/
 │
-├── frontend/ # Next.js app
-│ ├── src/
-│ └── ...
+├── frontend/              # Next.js app
+│   ├── src/
+│   └── ...
 │
-├── backend/ # NestJS app
-│ ├── src/
-│ └── prisma/
+├── backend/               # NestJS app
+│   ├── src/
+│   └── prisma/
 │
 ├── docker-compose.yml
 └── README.md
+
