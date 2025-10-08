@@ -3,11 +3,6 @@ description: "Tạo Epic mới để gom nhóm các User Stories"
 title: "Epic: <tên epic>"
 labels: ["epic"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        ## 🎯 Mục tiêu
-        Mô tả tổng quan về Epic này. Ví dụ: "Xây dựng module Group Management (tạo, xem, thêm chi tiêu)"
   - type: textarea
     id: goals
     attributes:
@@ -17,10 +12,6 @@ body:
   - type: textarea
     id: stories
     attributes:
-      label: "📋 Liên kết User Stories"
+      label: "User Stories"
       description: "Liệt kê các issue stories liên quan, ví dụ: #2, #3"
       placeholder: "- [ ] #2\n- [ ] #3"
-  - type: textarea
-    id: notes
-    attributes:
-      label: "🗒️ Ghi chú thêm (nếu có)"

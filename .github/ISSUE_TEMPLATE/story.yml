@@ -3,13 +3,6 @@ description: "Tạo một User Story cụ thể"
 title: "US-<số>: <tên story>"
 labels: ["story"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        ## ✨ User Story Format
-        **As a** [user type]  
-        **I want to** [mục tiêu của user]  
-        **So that** [lợi ích mong muốn]
   - type: textarea
     id: acceptance
     attributes:
