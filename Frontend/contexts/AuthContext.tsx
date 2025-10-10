@@ -1,139 +1,129 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface User {
-  id: string;
   name: string;
   email: string;
-  avatar?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  isLoading: boolean;
+  // for the app we expose an async login that accepts email/password
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  updateProfile: (data: { name?: string; email?: string; phone?: string }) => void;
   logout: () => void;
+  isLoading: boolean;
   isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  // default no-op implementations
+  login: async () => {},
+  register: async () => {},
+  updateProfile: () => {},
+  logout: () => {},
+  isLoading: false,
+  isAuthenticated: false,
+});
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check if user is logged in on mount
+  // Luôn đồng bộ user với localStorage khi mount
   useEffect(() => {
-    const checkAuth = () => {
-      try {
-        const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        
-        if (storedUser && token) {
-          setUser(JSON.parse(storedUser));
-        }
-      } catch (error) {
-        console.error('Error checking auth:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  const login = async (email: string, password: string) => {
     try {
-      setIsLoading(true);
-      
-      // TODO: Replace with actual API call
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful login
-      const mockUser: User = {
-        id: '1',
-        name: email.split('@')[0],
-        email: email,
-      };
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        localStorage.setItem('token', 'mock-jwt-token');
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      if (token && userData) {
+        setUser(JSON.parse(userData));
+        setIsAuthenticated(true);
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
       }
-      
-      setUser(mockUser);
-      router.push('/');
-    } catch (error) {
-      console.error('Login error:', error);
-      throw new Error('Đăng nhập thất bại');
+    } catch {
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  // Khi đăng nhập, cập nhật user và localStorage
+  // The UI calls login(email, password) and expects a Promise
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+
+    // Demo mode: accept any email/password. In real app call API here.
+    // Simulate network latency
+    await new Promise((res) => setTimeout(res, 300));
+
+    // reference password so linters don't complain (do NOT log it in real apps)
+    void password;
+
+    const fakeToken = btoa(`${email}:${Date.now()}`);
+    const userData: User = { name: email.split('@')[0] || email, email };
+
+    localStorage.setItem('token', fakeToken);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    setIsAuthenticated(true);
+    setIsLoading(false);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful registration
-      const mockUser: User = {
-        id: '1',
-        name: name,
-        email: email,
-      };
+    setIsLoading(true);
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        localStorage.setItem('token', 'mock-jwt-token');
-      }
-      
-      setUser(mockUser);
-      router.push('/');
-    } catch (error) {
-      console.error('Register error:', error);
-      throw new Error('Đăng ký thất bại');
-    } finally {
-      setIsLoading(false);
-    }
+    // Demo: accept any registration and directly login the user
+    await new Promise((res) => setTimeout(res, 300));
+
+    // reference password so linters don't complain (don't log real passwords)
+    void password;
+
+    const fakeToken = btoa(`${email}:${Date.now()}`);
+    const userData: User = { name: name || email.split('@')[0] || email, email };
+
+    localStorage.setItem('token', fakeToken);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+    setIsAuthenticated(true);
+    setIsLoading(false);
   };
 
+  // Khi đăng xuất, xóa user và localStorage
   const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
-    router.push('/login');
+    setIsAuthenticated(false);
+  };
+
+  const updateProfile = (data: { name?: string; email?: string; phone?: string }) => {
+    // update localStorage user object
+    try {
+      const existing = localStorage.getItem('user');
+      const parsed = existing ? JSON.parse(existing) : {};
+      const next = { ...parsed, ...(data.name ? { name: data.name } : {}), ...(data.email ? { email: data.email } : {}) };
+      localStorage.setItem('user', JSON.stringify(next));
+      if (data.phone !== undefined) {
+        localStorage.setItem('phone', data.phone);
+      }
+      setUser(next as User);
+    } catch {
+      // ignore
+    }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!user,
-      }}
-    >
+    <AuthContext.Provider value={{ user, login, register, updateProfile, logout, isLoading, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+};
