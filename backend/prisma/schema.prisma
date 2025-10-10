@@ -21,7 +21,7 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String
-  password  String   // will be hashed
+  password  String   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

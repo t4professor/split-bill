@@ -37,8 +37,8 @@ Người dùng có thể tạo nhóm, thêm chi tiêu và ứng dụng tự tín
 **BE:**
 
 -   [x] Khởi tạo NestJS project + Prisma + tạo Database
--   [ ] Tạo module `Auth` (mock login / JWT cơ bản)
--   [ ] Tạo module `Group` (tạo nhóm, xem danh sách nhóm)
+-   [x] Tạo module `Auth` (mock login / JWT cơ bản)
+-   [x] Tạo module `Group` (tạo nhóm, xem danh sách nhóm)
 
 ---
 
