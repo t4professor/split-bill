@@ -1,0 +1,17 @@
+name: "🟣 Epic"
+description: "Tạo Epic mới để gom nhóm các User Stories"
+title: "Epic: <tên epic>"
+labels: ["epic"]
+body:
+  - type: textarea
+    id: goals
+    attributes:
+      label: "Mục tiêu chi tiết"
+      description: "Liệt kê mục tiêu hoặc kết quả mong muốn của Epic"
+      placeholder: "- Cho phép tạo group\n- Cho phép thêm chi tiêu"
+  - type: textarea
+    id: stories
+    attributes:
+      label: "User Stories"
+      description: "Liệt kê các issue stories liên quan, ví dụ: #2, #3"
+      placeholder: "- [ ] #2\n- [ ] #3"
