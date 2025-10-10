@@ -1,0 +1,31 @@
+name: "🟢 User Story"
+description: "Tạo một User Story cụ thể"
+title: "US-<số>: <tên story>"
+labels: ["story"]
+body:
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "✅ Acceptance Criteria"
+      description: "Liệt kê điều kiện hoàn thành (gạch đầu dòng)"
+      placeholder: "- Hiển thị danh sách nhóm\n- Có thể thêm chi tiêu mới"
+  - type: dropdown
+    id: area
+    attributes:
+      label: "📦 Liên quan đến"
+      options:
+        - Frontend
+        - Backend
+        - Cả hai
+  - type: textarea
+    id: subtasks
+    attributes:
+      label: "🧱 Subtasks"
+      description: "Các công việc cụ thể để hoàn thành story này"
+      placeholder: "- [ ] FE: Tạo trang /groups\n- [ ] BE: Tạo API GET /groups"
+  - type: textarea
+    id: link
+    attributes:
+      label: "🔗 Thuộc Epic"
+      description: "Nhập #<epic-issue-number>"
+      placeholder: "Part of: #1"

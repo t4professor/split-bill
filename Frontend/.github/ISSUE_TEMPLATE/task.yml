@@ -1,0 +1,30 @@
+name: "🔵 Task / Subtask"
+description: "Tạo task nhỏ hoặc việc con thuộc 1 User Story"
+title: "Task: <mô tả ngắn>"
+labels: ["task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "📋 Mô tả task"
+      description: "Chi tiết công việc cần làm"
+      placeholder: "Ví dụ: Implement API POST /groups/:id/expenses"
+  - type: dropdown
+    id: type
+    attributes:
+      label: "💻 Loại task"
+      options:
+        - Frontend
+        - Backend
+        - Review
+        - Bugfix
+  - type: input
+    id: related_story
+    attributes:
+      label: "🔗 Thuộc User Story"
+      description: "Nhập số issue story liên quan"
+      placeholder: "#5"
+  - type: textarea
+    id: notes
+    attributes:
+      label: "🗒️ Ghi chú thêm"
