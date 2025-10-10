@@ -1,55 +1,71 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 export default function RegisterPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const { register, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
 
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/');
+      router.push("/");
     }
   }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Vui lòng nhập đầy đủ thông tin');
+    if (
+      !firstName ||
+      !lastName ||
+      !email ||
+      !phoneNumber ||
+      !password ||
+      !confirmPassword
+    ) {
+      setError("Vui lòng nhập đầy đủ thông tin");
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+      setError("Mật khẩu xác nhận không khớp");
       return;
     }
 
     if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
+      setError("Mật khẩu phải có ít nhất 6 ký tự");
       return;
     }
 
     try {
-      await register(name, email, password);
+      const fullName = `${firstName} ${lastName}`;
+      await register(fullName, email, password, phoneNumber);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng ký thất bại');
+      setError(err instanceof Error ? err.message : "Đăng ký thất bại");
     }
   };
 
@@ -96,14 +112,41 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Tên</Label>
+                <Input
+                  id="firstName"
+                  type="text"
+                  placeholder="Nguyễn Văn"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Họ</Label>
+                <Input
+                  id="lastName"
+                  type="text"
+                  placeholder="A"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="name">Họ và tên</Label>
+              <Label htmlFor="phoneNumber">Số điện thoại</Label>
               <Input
-                id="name"
-                type="text"
-                placeholder="Nguyễn Văn A"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                id="phoneNumber"
+                type="tel"
+                placeholder="0123456789"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
                 disabled={isLoading}
                 required
               />
@@ -121,7 +164,7 @@ export default function RegisterPage() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Mật khẩu</Label>
               <Input
@@ -155,13 +198,16 @@ export default function RegisterPage() {
                   Đang đăng ký...
                 </>
               ) : (
-                'Đăng ký'
+                "Đăng ký"
               )}
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">
-              Đã có tài khoản?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
+              Đã có tài khoản?{" "}
+              <Link
+                href="/login"
+                className="text-primary hover:underline font-medium"
+              >
                 Đăng nhập
               </Link>
             </div>
