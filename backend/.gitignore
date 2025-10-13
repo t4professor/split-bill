@@ -3,7 +3,8 @@
 /node_modules
 /dist
 /build
-
+# SQLite database
+/prisma/dev.db
 # Logs
 logs
 *.log
