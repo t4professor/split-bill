@@ -19,7 +19,7 @@ import { JwtStrategy } from './jwt.strategy';
         // get JWT_SECRET and JWT_EXPIRES_IN from .env file
         secret: configService.get<string>('JWT_SECRET') || 'dev_secret_key',
         signOptions: {
-          expiresIn: configService.get<number>('JWT_EXPIRES_IN') || 3600, //1hour
+          expiresIn: (configService.get<string>('JWT_EXPIRES_IN') || '1h') as any,
         },
       }),
     }),
