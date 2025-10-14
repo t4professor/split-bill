@@ -19,6 +19,7 @@ export type SeedExpense = {
   amount: number;
   paidBy: string;
   date: string;
+  participantIds: string[];
 };
 
 export type SeedGroupDetail = {
@@ -52,6 +53,7 @@ export const seedGroupDetails: Record<string, SeedGroupDetail> = {
         amount: 1500000,
         paidBy: "Trần Thị B",
         date: "2024-01-15",
+        participantIds: ["1", "2"],
       },
       {
         id: "2",
@@ -59,6 +61,7 @@ export const seedGroupDetails: Record<string, SeedGroupDetail> = {
         amount: 600000,
         paidBy: "Nguyễn Văn A",
         date: "2024-01-15",
+        participantIds: ["1", "3"],
       },
       {
         id: "3",
@@ -66,6 +69,7 @@ export const seedGroupDetails: Record<string, SeedGroupDetail> = {
         amount: 500000,
         paidBy: "Trần Thị B",
         date: "2024-01-16",
+        participantIds: ["2", "3"],
       },
     ],
   },
