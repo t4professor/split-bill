@@ -2,15 +2,16 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  async findById(id: number): Promise<User | null> {
+  async findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async updateAvatar(userId: number, filePath: string): Promise<User> {
+  async updateAvatar(userId: string, filePath: string): Promise<User> {
     const relativePath = filePath.replace(/^.*uploads[\\/]/, 'uploads/');
     return this.prisma.user.update({
       where: { id: userId },
@@ -18,14 +19,15 @@ export class UserService {
     });
   }
 
-  async updatePaymentQr(userId: number, filePath: string): Promise<User> {
+  async updatePaymentQr(userId: string, filePath: string): Promise<User> {
     const relativePath = filePath.replace(/^.*uploads[\\/]/, 'uploads/');
     return this.prisma.user.update({
       where: { id: userId },
       data: { paymentQrPath: relativePath },
     });
   }
-  async updateProfile(userId: number, data: UpdateProfileDto) {
+
+  async updateProfile(userId: string, data: UpdateProfileDto) {
     if (data.userName) {
       const existing = await this.prisma.user.findUnique({
         where: { userName: data.userName },
