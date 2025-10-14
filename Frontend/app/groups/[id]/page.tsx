@@ -14,6 +14,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Plus, Receipt } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 // Mock data
 const groupData = {
@@ -24,6 +32,7 @@ const groupData = {
     { id: "1", name: "Nguyễn Văn A", spent: 500000, owes: 200000 },
     { id: "2", name: "Trần Thị B", spent: 800000, owes: -100000 },
     { id: "3", name: "Lê Văn C", spent: 300000, owes: 400000 },
+    { id: "4", name: "Tam", spent: 300000, owes: 400000 },
   ],
   expenses: [
     {
@@ -61,6 +70,7 @@ export default function GroupDetailPage({
     description: "",
     amount: "",
     paidBy: "",
+    participants: [] as string[],
   });
 
   return (
@@ -146,6 +156,22 @@ export default function GroupDetailPage({
                     <p className="text-sm text-muted-foreground">
                       {expense.paidBy} thanh toán
                     </p>
+                    {/* Show thành viên trong CardContent Component */}
+                    {expense.participants &&
+                      expense.participants.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Thành viên:{" "}
+                          {expense.participants
+                            .map((id: string) => {
+                              const member = groupData.members.find(
+                                (m) => m.id === id
+                              );
+                              return member ? member.name : "";
+                            })
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      )}
                     <p className="text-xs text-muted-foreground">
                       {new Date(expense.date).toLocaleDateString("vi-VN")}
                     </p>
@@ -177,48 +203,106 @@ export default function GroupDetailPage({
                     date: new Date().toISOString(),
                   },
                 ]);
-                setNewExpense({ description: "", amount: "", paidBy: "" });
+                setNewExpense({
+                  description: "",
+                  amount: "",
+                  paidBy: "",
+                  participants: [] as string[],
+                });
               }}
               className="space-y-4"
             >
               <div>
                 <label className="block text-sm font-medium">Người chi</label>
-                <input
+                <Input
                   type="text"
                   value={newExpense.paidBy}
                   onChange={(e) =>
                     setNewExpense({ ...newExpense, paidBy: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
+                  placeholder="Nguyễn Văn A"
+                ></Input>
               </div>
+
               <div>
                 <label className="block text-sm font-medium">Số tiền</label>
-                <input
+                <Input
                   type="number"
                   value={newExpense.amount}
                   onChange={(e) =>
                     setNewExpense({ ...newExpense, amount: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
+                  placeholder="Ex. 500000"
+                ></Input>
               </div>
               <div>
                 <label className="block text-sm font-medium">Mô tả</label>
-                <input
+                <Input
                   type="text"
                   value={newExpense.description}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setNewExpense({
                       ...newExpense,
                       description: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
+                    });
+                  }}
+                  placeholder="Nhập mô tả của chi tiêu này"
+                ></Input>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">
+                  Thành viên của chi tiêu này
+                </label>
+
+                <Select
+                  onValueChange={(value) => {
+                    setNewExpense((prev) => {
+                      const participants = prev.participants.includes(value)
+                        ? prev.participants.filter((id) => id !== value)
+                        : [...prev.participants, value];
+                      return { ...prev, participants };
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn thành viên" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groupData.members.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/*Hiển thị thành viên trong Select bên dưới*/}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newExpense.participants.map((id) => {
+                    // Loop qua từng id | xem id có kớp với id đang xét không
+                    const member = groupData.members.find((m) => m.id === id);
+                    return (
+                      <span key={id} className="bg-gray-200 px-2 py-1 rounded">
+                        {member?.name}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNewExpense((prev) => ({
+                              ...prev,
+                              participants: prev.participants.filter(
+                                (pid) => pid !== id
+                              ),
+                            }))
+                          }
+                          className="ml-1 text-red-500"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
               <Button type="submit" className="w-full">
                 Lưu chi tiêu
