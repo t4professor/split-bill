@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface User {
   name: string;
@@ -11,8 +11,17 @@ interface AuthContextType {
   user: User | null;
   // for the app we expose an async login that accepts email/password
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
-  updateProfile: (data: { name?: string; email?: string; phone?: string }) => void;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    phoneNumber: string
+  ) => Promise<void>;
+  updateProfile: (data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  }) => void;
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -39,8 +48,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Luôn đồng bộ user với localStorage khi mount
   useEffect(() => {
     try {
-      const token = localStorage.getItem('token');
-      const userData = localStorage.getItem('user');
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("user");
       if (token && userData) {
         setUser(JSON.parse(userData));
         setIsAuthenticated(true);
@@ -69,10 +78,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void password;
 
     const fakeToken = btoa(`${email}:${Date.now()}`);
-    const userData: User = { name: email.split('@')[0] || email, email };
+    const userData: User = { name: email.split("@")[0] || email, email };
 
-    localStorage.setItem('token', fakeToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("token", fakeToken);
+    localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     setIsAuthenticated(true);
     setIsLoading(false);
@@ -88,10 +97,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void password;
 
     const fakeToken = btoa(`${email}:${Date.now()}`);
-    const userData: User = { name: name || email.split('@')[0] || email, email };
+    const userData: User = {
+      name: name || email.split("@")[0] || email,
+      email,
+    };
 
-    localStorage.setItem('token', fakeToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("token", fakeToken);
+    localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     setIsAuthenticated(true);
     setIsLoading(false);
@@ -99,21 +111,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Khi đăng xuất, xóa user và localStorage
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUser(null);
     setIsAuthenticated(false);
   };
 
-  const updateProfile = (data: { name?: string; email?: string; phone?: string }) => {
+  const updateProfile = (data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  }) => {
     // update localStorage user object
     try {
-      const existing = localStorage.getItem('user');
+      const existing = localStorage.getItem("user");
       const parsed = existing ? JSON.parse(existing) : {};
-      const next = { ...parsed, ...(data.name ? { name: data.name } : {}), ...(data.email ? { email: data.email } : {}) };
-      localStorage.setItem('user', JSON.stringify(next));
+      const next = {
+        ...parsed,
+        ...(data.name ? { name: data.name } : {}),
+        ...(data.email ? { email: data.email } : {}),
+      };
+      localStorage.setItem("user", JSON.stringify(next));
       if (data.phone !== undefined) {
-        localStorage.setItem('phone', data.phone);
+        localStorage.setItem("phone", data.phone);
       }
       setUser(next as User);
     } catch {
@@ -122,7 +142,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, updateProfile, logout, isLoading, isAuthenticated }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        register,
+        updateProfile,
+        logout,
+        isLoading,
+        isAuthenticated,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
