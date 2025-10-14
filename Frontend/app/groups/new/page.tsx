@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  GROUP_DETAIL_STORAGE_KEY,
+  GROUPS_STORAGE_KEY,
+} from "@/lib/constants";
+import { type SeedGroupDetail } from "@/lib/seedData";
 
 export default function NewGroupPage() {
   const router = useRouter();
@@ -13,11 +18,62 @@ export default function NewGroupPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!groupName.trim()) {
+      return;
+    }
 
-    console.log("Group Name:", groupName);
-    console.log("Description:", description);
-    const newGroupId = "4";
-    router.push(`/groups/${newGroupId}`);
+    const newGroup = {
+      id: crypto.randomUUID(),
+      name: groupName.trim(),
+      description: description.trim() || undefined,
+      members: 0,
+      totalBill: 0,
+    };
+
+    const stored = typeof window !== "undefined"
+      ? window.localStorage.getItem(GROUPS_STORAGE_KEY)
+      : null;
+    let groups: typeof newGroup[] = [];
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          groups = parsed;
+        }
+      } catch (error) {
+        console.error("Failed to parse stored groups", error);
+      }
+    }
+
+    window.localStorage.setItem(
+      GROUPS_STORAGE_KEY,
+      JSON.stringify([newGroup, ...groups])
+    );
+
+    try {
+      const detailStored = window.localStorage.getItem(
+        GROUP_DETAIL_STORAGE_KEY
+      );
+      const parsed = detailStored
+        ? (JSON.parse(detailStored) as Record<string, SeedGroupDetail>)
+        : {};
+      parsed[newGroup.id] = {
+        id: newGroup.id,
+        name: newGroup.name,
+        description: newGroup.description,
+        members: [],
+        expenses: [],
+      };
+      window.localStorage.setItem(
+        GROUP_DETAIL_STORAGE_KEY,
+        JSON.stringify(parsed)
+      );
+    } catch (error) {
+      console.error("Failed to persist new group detail", error);
+    }
+
+    router.push("/groups");
   };
 
   return (
