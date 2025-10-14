@@ -16,7 +16,8 @@ export default function NewGroupPage() {
 
     console.log("Group Name:", groupName);
     console.log("Description:", description);
-    router.push("/groups");
+    const newGroupId = "4";
+    router.push(`/groups/${newGroupId}`);
   };
 
   return (
