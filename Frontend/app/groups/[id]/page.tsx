@@ -3,19 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { GROUP_DETAIL_STORAGE_KEY, GROUPS_STORAGE_KEY } from "@/lib/constants";
 import {
-  GROUP_DETAIL_STORAGE_KEY,
-  GROUPS_STORAGE_KEY,
-} from "@/lib/constants";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   seedGroupDetails,
   type SeedExpense,
@@ -47,6 +46,7 @@ export default function GroupDetailPage() {
     description: "",
     amount: "",
     paidBy: "",
+    participantIds: [] as string[],
   });
   const [newMemberName, setNewMemberName] = useState("");
   const [showAddMember, setShowAddMember] = useState(false);
@@ -178,6 +178,7 @@ export default function GroupDetailPage() {
           amount: safeAmount,
           paidBy: newExpense.paidBy.trim(),
           date: new Date().toISOString(),
+          participantIds: newExpense.participantIds,
         },
       ],
     };
@@ -185,7 +186,12 @@ export default function GroupDetailPage() {
     setGroupDetail(nextDetail);
     persistGroupDetail(nextDetail);
     syncGroupSummary(nextDetail, setGroupSummary);
-    setNewExpense({ description: "", amount: "", paidBy: "" });
+    setNewExpense({
+      description: "",
+      amount: "",
+      paidBy: "",
+      participantIds: [],
+    });
   };
 
   const title = groupDetail
@@ -282,9 +288,7 @@ export default function GroupDetailPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarFallback>
-                          {member.name.charAt(0)}
-                        </AvatarFallback>
+                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div>
                         <p className="font-medium">{member.name}</p>
@@ -301,9 +305,8 @@ export default function GroupDetailPage() {
                           </p>
                         ) : member.owes < 0 ? (
                           <p className="text-sm text-green-600">
-                            Được trả {Math.abs(member.owes).toLocaleString(
-                              "vi-VN"
-                            )}đ
+                            Được trả{" "}
+                            {Math.abs(member.owes).toLocaleString("vi-VN")}đ
                           </p>
                         ) : (
                           <p className="text-sm text-muted-foreground">
@@ -351,6 +354,13 @@ export default function GroupDetailPage() {
                       <p className="text-xs text-muted-foreground">
                         {new Date(expense.date).toLocaleDateString("vi-VN")}
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        Tham gia:{" "}
+                        {expense.participantIds
+                          .map((id) => members.find((m) => m.id === id)?.name)
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
                     </div>
                     <p className="font-semibold">
                       {expense.amount.toLocaleString("vi-VN")}đ
@@ -369,7 +379,7 @@ export default function GroupDetailPage() {
               <form onSubmit={handleAddExpense} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium">Người chi</label>
-                  <input
+                  <Input
                     type="text"
                     value={newExpense.paidBy}
                     onChange={(event) =>
@@ -378,25 +388,32 @@ export default function GroupDetailPage() {
                         paidBy: event.target.value,
                       })
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nguyễn Văn A"
                     required
+                    className="text-sm"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Số tiền</label>
-                  <input
+
+                  <Input
                     type="number"
                     value={newExpense.amount}
                     onChange={(event) =>
-                      setNewExpense({ ...newExpense, amount: event.target.value })
+                      setNewExpense({
+                        ...newExpense,
+                        amount: event.target.value,
+                      })
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex. 500000"
+                    className="text-sm"
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Mô tả</label>
-                  <input
+
+                  <Input
                     type="text"
                     value={newExpense.description}
                     onChange={(event) =>
@@ -405,9 +422,65 @@ export default function GroupDetailPage() {
                         description: event.target.value,
                       })
                     }
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Mục đích của chi tiêu này"
                     required
+                    className="text-sm"
                   />
+                  <div className="pt-4">
+                    <label className="block text-sm font-medium">
+                      Thành viên của chi tiêu này
+                    </label>
+                    <Select
+                      onValueChange={(value) => {
+                        setNewExpense((prev) => {
+                          const participantIds = prev.participantIds.includes(
+                            value
+                          )
+                            ? prev.participantIds.filter((id) => id !== value)
+                            : [...prev.participantIds, value];
+                          return { ...prev, participantIds };
+                        });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn thành viên" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {newExpense.participantIds.map((id) => {
+                        const member = members.find((m) => m.id === id);
+                        return (
+                          <span
+                            key={id}
+                            className="bg-gray-200 px-2 py-1 rounded"
+                          >
+                            {member?.name}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewExpense((prev) => ({
+                                  ...prev,
+                                  participantIds: prev.participantIds.filter(
+                                    (pid) => pid !== id
+                                  ),
+                                }))
+                              }
+                              className="ml-1 text-red-500"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <Button type="submit" className="w-full">
                   Lưu chi tiêu
@@ -492,6 +565,7 @@ function writeGroupSummaries(summaries: GroupSummary[]): void {
     JSON.stringify(summaries)
   );
   notifyDataChanged();
+  window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
 }
 
 function calculateTotal(expenses: Expense[]): number {
