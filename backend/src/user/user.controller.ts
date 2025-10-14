@@ -28,6 +28,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('user')
 export class UserController {
@@ -73,7 +74,7 @@ export class UserController {
 
   // 🖼 Get avatar by user ID
   @Get(':id/avatar')
-  async getAvatar(@Param('id') id: number, @Res() res: Response) {
+  async getAvatar(@Param('id') id: string, @Res() res: Response) {
     const user = await this.userService.findById(String(id));
     if (!user?.avatarPath) throw new NotFoundException('Avatar not found');
 
@@ -85,7 +86,7 @@ export class UserController {
 
   // Get payment QR by user ID
   @Get(':id/payment-qr')
-  async getPaymentQr(@Param('id') id: number, @Res() res: Response) {
+  async getPaymentQr(@Param('id') id: string, @Res() res: Response) {
     const targetUser = await this.userService.findById(String(id));
     if (!targetUser?.paymentQrPath)
       throw new NotFoundException('Payment QR not found');
@@ -108,6 +109,7 @@ export class UserController {
   }
 
   // Update user profile
+  @ApiOperation({ summary: "Used to update the user's profile"})
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
   @UsePipes(new ValidationPipe({ whitelist: true }))
