@@ -1,74 +1,217 @@
 'use client';
 
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { useCallback, useEffect, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, TrendingUp, Users, Receipt, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import {
+  GROUP_DETAIL_STORAGE_KEY,
+  GROUPS_STORAGE_KEY,
+} from '@/lib/constants';
+import {
+  seedGroupDetails,
+  seedGroups,
+  type SeedGroupDetail,
+} from '@/lib/seedData';
+
+type GroupSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  members: number;
+  totalBill: number;
+};
+
+type RecentActivity = {
+  id: string;
+  type: 'expense';
+  group: string;
+  description: string;
+  amount: number;
+  timestamp?: number;
+  timeLabel: string;
+};
+
+const QUICK_ACTIONS = [
+  {
+    icon: Plus,
+    label: 'Tạo nhóm mới',
+    description: 'Bắt đầu chia bill với bạn bè',
+    href: '/groups/new',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50',
+  },
+  {
+    icon: Receipt,
+    label: 'Thêm chi phí',
+    description: 'Ghi lại khoản chi tiêu',
+    href: '/expenses/new',
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+  },
+  {
+    icon: Users,
+    label: 'Xem nhóm',
+    description: 'Quản lý các nhóm của bạn',
+    href: '/groups',
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50',
+  },
+];
 
 export default function HomePage() {
-  // Mock data - thay bằng real data từ API
-  const stats = {
-    totalGroups: 3,
-    totalExpenses: 15,
-    totalAmount: 10500000,
-    pendingSettlements: 2,
-  };
+  const [stats, setStats] = useState({
+    totalGroups: 0,
+    totalExpenses: 0,
+    totalAmount: 0,
+    pendingSettlements: 0,
+  });
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [groupSummaries, setGroupSummaries] = useState<GroupSummary[]>([]);
 
-  const recentActivities = [
-    {
-      id: '1',
-      type: 'expense',
-      group: 'Du lịch Đà Lạt',
-      description: 'Khách sạn',
-      amount: 1500000,
-      time: '2 giờ trước',
-    },
-    {
-      id: '2',
-      type: 'settlement',
-      group: 'Team outing',
-      description: 'Minh đã thanh toán cho Hùng',
-      amount: 300000,
-      time: '5 giờ trước',
-    },
-    {
-      id: '3',
-      type: 'expense',
-      group: 'Sinh nhật Minh',
-      description: 'Đặt bánh kem',
-      amount: 500000,
-      time: 'Hôm qua',
-    },
-  ];
+  const ensureSeedData = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
 
-  const quickActions = [
-    {
-      icon: Plus,
-      label: 'Tạo nhóm mới',
-      description: 'Bắt đầu chia bill với bạn bè',
-      href: '/groups/new',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-    },
-    {
-      icon: Receipt,
-      label: 'Thêm chi phí',
-      description: 'Ghi lại khoản chi tiêu',
-      href: '/expenses/new',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-    },
-    {
-      icon: Users,
-      label: 'Xem nhóm',
-      description: 'Quản lý các nhóm của bạn',
-      href: '/groups',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-    },
-  ];
+    const storedGroups = window.localStorage.getItem(GROUPS_STORAGE_KEY);
+    if (!storedGroups) {
+      window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(seedGroups));
+    }
+
+    const storedDetails = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
+    if (!storedDetails) {
+      window.localStorage.setItem(
+        GROUP_DETAIL_STORAGE_KEY,
+        JSON.stringify(seedGroupDetails)
+      );
+    }
+  }, []);
+
+  const loadDashboardData = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    ensureSeedData();
+
+    let summaries: GroupSummary[] = seedGroups;
+    let details: Record<string, SeedGroupDetail> = seedGroupDetails;
+
+    const groupsRaw = window.localStorage.getItem(GROUPS_STORAGE_KEY);
+    if (groupsRaw) {
+      try {
+        const parsed = JSON.parse(groupsRaw) as GroupSummary[];
+        if (Array.isArray(parsed)) {
+          summaries = parsed;
+        }
+      } catch (error) {
+        console.error('Failed to parse stored groups', error);
+      }
+    }
+
+    const detailsRaw = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
+    if (detailsRaw) {
+      try {
+        const parsed = JSON.parse(detailsRaw) as Record<string, SeedGroupDetail>;
+        if (parsed && typeof parsed === 'object') {
+          details = parsed;
+        }
+      } catch (error) {
+        console.error('Failed to parse stored group details', error);
+      }
+    }
+
+    const relevantDetails = summaries
+      .map((summary) => details[summary.id])
+      .filter((detail): detail is SeedGroupDetail => Boolean(detail));
+
+    const enrichedSummaries = summaries
+      .map((summary) => {
+        const detail = details[summary.id];
+        if (!detail) {
+          return summary;
+        }
+
+        const totalBill = detail.expenses.reduce(
+          (sum, expense) => sum + expense.amount,
+          0
+        );
+
+        return {
+          ...summary,
+          members: detail.members.length,
+          totalBill,
+        } satisfies GroupSummary;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+
+    const totalExpenses = relevantDetails.reduce(
+      (sum, detail) => sum + detail.expenses.length,
+      0
+    );
+    const totalAmount = enrichedSummaries.reduce(
+      (sum, summary) => sum + summary.totalBill,
+      0
+    );
+
+    setGroupSummaries(enrichedSummaries);
+
+    setStats({
+      totalGroups: enrichedSummaries.length,
+      totalExpenses,
+      totalAmount,
+      pendingSettlements: 0,
+    });
+
+    const activities: RecentActivity[] = relevantDetails
+      .flatMap((detail) =>
+        detail.expenses.map((expense) => {
+          const timestamp = expense.date ? new Date(expense.date).getTime() : undefined;
+          return {
+            id: `${detail.id}-${expense.id}`,
+            type: 'expense' as const,
+            group: detail.name,
+            description: expense.description,
+            amount: expense.amount,
+            timestamp,
+            timeLabel: timestamp
+              ? new Date(timestamp).toLocaleString('vi-VN')
+              : 'Chưa rõ thời gian',
+          } satisfies RecentActivity;
+        })
+      )
+      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+      .slice(0, 5);
+
+    setRecentActivities(activities);
+  }, [ensureSeedData]);
+
+  useEffect(() => {
+    loadDashboardData();
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === GROUPS_STORAGE_KEY || event.key === GROUP_DETAIL_STORAGE_KEY) {
+        loadDashboardData();
+      }
+    };
+
+    const handleDataChanged = () => loadDashboardData();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('sb:data-changed', handleDataChanged as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('sb:data-changed', handleDataChanged as EventListener);
+    };
+  }, [loadDashboardData]);
 
   return (
     <MainLayout title="Trang chủ">
@@ -138,7 +281,7 @@ export default function HomePage() {
             <CardTitle>Thao tác nhanh</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {quickActions.map((action) => {
+            {QUICK_ACTIONS.map((action) => {
               const Icon = action.icon;
               return (
                 <Link key={action.label} href={action.href}>
@@ -157,6 +300,50 @@ export default function HomePage() {
                 </Link>
               );
             })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Nhóm của bạn</CardTitle>
+              <Link href="/groups">
+                <Button variant="ghost" size="sm">
+                  Quản lý nhóm
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {groupSummaries.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Bạn chưa có nhóm nào, hãy tạo nhóm mới để bắt đầu chia bill.
+              </p>
+            ) : (
+              groupSummaries.slice(0, 5).map((group) => (
+                <Link key={group.id} href={`/groups/${group.id}`}>
+                  <div className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent transition-colors">
+                    <div>
+                      <p className="font-semibold leading-tight">{group.name}</p>
+                      {group.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-1">
+                          {group.description}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">
+                        {group.members} thành viên
+                      </p>
+                      <p className="text-sm font-medium">
+                        {group.totalBill.toLocaleString('vi-VN')}đ
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -184,18 +371,8 @@ export default function HomePage() {
                   key={activity.id}
                   className="flex items-start gap-3 pb-4 border-b last:border-0 last:pb-0"
                 >
-                  <div
-                    className={`p-2 rounded-full ${
-                      activity.type === 'expense'
-                        ? 'bg-orange-50'
-                        : 'bg-green-50'
-                    }`}
-                  >
-                    {activity.type === 'expense' ? (
-                      <Receipt className="h-4 w-4 text-orange-600" />
-                    ) : (
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                    )}
+                  <div className="p-2 rounded-full bg-orange-50">
+                    <Receipt className="h-4 w-4 text-orange-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{activity.group}</p>
@@ -203,7 +380,7 @@ export default function HomePage() {
                       {activity.description}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {activity.time}
+                      {activity.timeLabel}
                     </p>
                   </div>
                   <p className="font-semibold text-sm whitespace-nowrap">

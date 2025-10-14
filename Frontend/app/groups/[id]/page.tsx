@@ -243,7 +243,7 @@ export default function GroupDetailPage() {
               </div>
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 onClick={() => setShowAddMember((current) => !current)}
                 aria-label={
                   showAddMember
@@ -251,7 +251,7 @@ export default function GroupDetailPage() {
                     : "Thêm thành viên"
                 }
               >
-                <span className="text-lg leading-none">+</span>
+                {showAddMember ? "Đóng" : "Thêm"}
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -268,10 +268,10 @@ export default function GroupDetailPage() {
                   />
                   <Button
                     type="submit"
-                    size="icon"
+                    size="sm"
                     aria-label="Xác nhận thêm thành viên"
                   >
-                    <span className="text-lg leading-none">+</span>
+                    Thêm
                   </Button>
                 </form>
               )}
@@ -530,6 +530,7 @@ function persistGroupDetail(detail: GroupDetail): void {
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(current)
     );
+    notifyDataChanged();
   } catch (error) {
     console.error("Failed to persist group detail", error);
   }
@@ -559,6 +560,11 @@ function writeGroupSummaries(summaries: GroupSummary[]): void {
     return;
   }
 
+  window.localStorage.setItem(
+    GROUPS_STORAGE_KEY,
+    JSON.stringify(summaries)
+  );
+  notifyDataChanged();
   window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
 }
 
@@ -596,4 +602,12 @@ function syncGroupSummary(
   } catch (error) {
     console.error("Failed to sync group summary", error);
   }
+}
+
+function notifyDataChanged(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event("sb:data-changed"));
 }

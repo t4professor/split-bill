@@ -61,6 +61,7 @@ export default function GroupsPage() {
       GROUPS_STORAGE_KEY,
       JSON.stringify(seedGroups)
     );
+    notifyDataChanged();
     ensureSeededGroupDetails();
     setInitialized(true);
   }, []);
@@ -71,6 +72,7 @@ export default function GroupsPage() {
     }
 
     window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
+    notifyDataChanged();
   }, [groups, initialized]);
 
   const resetCreator = () => {
@@ -241,6 +243,7 @@ function ensureSeededGroupDetails() {
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(seedGroupDetails)
     );
+    notifyDataChanged();
     return;
   }
 
@@ -254,12 +257,14 @@ function ensureSeededGroupDetails() {
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(merged)
     );
+    notifyDataChanged();
   } catch (error) {
     console.error("Failed to parse stored group details", error);
     window.localStorage.setItem(
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(seedGroupDetails)
     );
+    notifyDataChanged();
   }
 }
 
@@ -281,6 +286,7 @@ function persistGroupDetail(
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(next)
     );
+    notifyDataChanged();
   } catch (error) {
     console.error("Failed to persist group detail", error);
   }
@@ -308,7 +314,16 @@ function removeGroupDetail(groupId: string): void {
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(rest)
     );
+    notifyDataChanged();
   } catch (error) {
     console.error("Failed to remove group detail", error);
   }
+}
+
+function notifyDataChanged(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event("sb:data-changed"));
 }

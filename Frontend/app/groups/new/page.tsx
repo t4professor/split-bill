@@ -50,6 +50,7 @@ export default function NewGroupPage() {
       GROUPS_STORAGE_KEY,
       JSON.stringify([newGroup, ...groups])
     );
+    notifyDataChanged();
 
     try {
       const detailStored = window.localStorage.getItem(
@@ -69,6 +70,7 @@ export default function NewGroupPage() {
         GROUP_DETAIL_STORAGE_KEY,
         JSON.stringify(parsed)
       );
+      notifyDataChanged();
     } catch (error) {
       console.error("Failed to persist new group detail", error);
     }
@@ -105,4 +107,12 @@ export default function NewGroupPage() {
       </form>
     </MainLayout>
   );
+}
+
+function notifyDataChanged(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event("sb:data-changed"));
 }
