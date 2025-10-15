@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -13,6 +19,7 @@ import {
   type SeedExpense,
   type SeedGroupDetail,
 } from "@/lib/seedData";
+import { buildInvitePath, resolveInviteLink } from "@/lib/utils";
 import { MemberSelector } from "@/components/ui/MemberSelector";
 import { Plus, Receipt } from "lucide-react";
 type Expense = SeedExpense;
@@ -25,6 +32,8 @@ type GroupSummary = {
   description?: string;
   members: number;
   totalBill: number;
+  inviteCode?: string;
+  inviteLink?: string;
 };
 
 type Settlement = {
@@ -199,10 +208,19 @@ export default function GroupDetailPage() {
     }
 
     if (detail) {
+      const normalizedId = detail.id || summary?.id || groupId;
+      const inviteCode = detail.inviteCode ?? summary?.inviteCode;
+      const fallbackLink = inviteCode
+        ? buildInvitePath(normalizedId, inviteCode)
+        : undefined;
+
       const normalized: GroupDetail = {
-        id: detail.id || summary?.id || groupId,
+        id: normalizedId,
         name: summary?.name ?? detail.name,
         description: summary?.description ?? detail.description,
+        inviteCode,
+        inviteLink:
+          detail.inviteLink ?? summary?.inviteLink ?? fallbackLink,
         members: detail.members ?? [],
         expenses: detail.expenses ?? [],
       };
@@ -233,6 +251,10 @@ export default function GroupDetailPage() {
     id: groupId,
     name: groupSummary?.name ?? `Nhóm ${groupId}`,
     description: groupSummary?.description,
+    inviteCode: groupSummary?.inviteCode,
+    inviteLink:
+      groupSummary?.inviteLink ??
+      (groupSummary?.inviteCode ? buildInvitePath(groupId, groupSummary.inviteCode) : undefined),
     members: [],
     expenses: [],
   });
@@ -327,6 +349,14 @@ export default function GroupDetailPage() {
     );
   };
 
+  const {
+    shareLink,
+    copyStatus,
+    copyInviteLink,
+    inviteCode: detailInviteCode,
+  } = useInviteShare(groupDetail);
+  const displayInviteCode = detailInviteCode ?? groupSummary?.inviteCode;
+
   const title = groupDetail
     ? groupDetail.name
     : groupSummary
@@ -369,6 +399,14 @@ export default function GroupDetailPage() {
         </Card>
       ) : (
         <div className="space-y-6">
+          {shareLink ? (
+            <ShareInviteCard
+              link={shareLink}
+              inviteCode={displayInviteCode}
+              status={copyStatus}
+              onCopy={copyInviteLink}
+            />
+          ) : null}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -644,6 +682,146 @@ export default function GroupDetailPage() {
   );
 }
 
+type ShareStatus = "idle" | "success" | "error";
+
+function useInviteShare(detail: GroupDetail | null) {
+  const [status, setStatus] = useState<ShareStatus>("idle");
+  const timeoutRef = useRef<number | null>(null);
+
+  const shareLink = useMemo(() => {
+    if (!detail) {
+      return "";
+    }
+
+    if (detail.inviteLink) {
+      return resolveInviteLink(detail.inviteLink);
+    }
+
+    if (detail.inviteCode) {
+      return resolveInviteLink(buildInvitePath(detail.id, detail.inviteCode));
+    }
+
+    return "";
+  }, [detail]);
+
+  const scheduleReset = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = window.setTimeout(() => {
+      setStatus("idle");
+      timeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const copyInviteLink = useCallback(async () => {
+    if (!shareLink) {
+      setStatus("error");
+      scheduleReset();
+      return;
+    }
+
+    try {
+      if (
+        typeof navigator === "undefined" ||
+        !("clipboard" in navigator) ||
+        !navigator.clipboard
+      ) {
+        throw new Error("Clipboard API unavailable");
+      }
+
+      await navigator.clipboard.writeText(shareLink);
+      setStatus("success");
+    } catch (error) {
+      console.error("Failed to copy invite link", error);
+      setStatus("error");
+    } finally {
+      scheduleReset();
+    }
+  }, [shareLink, scheduleReset]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  return {
+    shareLink,
+    copyStatus: status,
+    copyInviteLink,
+    inviteCode: detail?.inviteCode,
+  };
+}
+
+type ShareInviteCardProps = {
+  link: string;
+  inviteCode?: string | null;
+  status: ShareStatus;
+  onCopy: () => void;
+};
+
+const ShareInviteCard = memo(function ShareInviteCard({
+  link,
+  inviteCode,
+  status,
+  onCopy,
+}: ShareInviteCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Chia sẻ nhóm</CardTitle>
+        <CardDescription>
+          Gửi link này cho người khác để tham gia nhóm.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Input
+            readOnly
+            value={link}
+            className="font-mono text-sm"
+            aria-label="Link mời nhóm"
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={onCopy}
+            className="w-full sm:w-auto"
+          >
+            Sao chép link
+          </Button>
+        </div>
+        <div className="mt-3 space-y-1">
+          {status === "success" ? (
+            <p className="text-sm text-emerald-600">Đã sao chép link mời.</p>
+          ) : null}
+          {status === "error" ? (
+            <p className="text-sm text-destructive">
+              Không thể sao chép tự động, vui lòng copy thủ công.
+            </p>
+          ) : null}
+          {inviteCode ? (
+            <p className="text-xs text-muted-foreground">Mã mời: {inviteCode}</p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
 function readGroupDetails(): Record<string, GroupDetail> {
   if (typeof window === "undefined") {
     return {};
@@ -912,6 +1090,9 @@ function syncGroupSummary(
     description: detail.description,
     members: detail.members.length,
     totalBill: calculateTotal(detail.expenses),
+    inviteCode: detail.inviteCode,
+    inviteLink: detail.inviteLink ??
+      (detail.inviteCode ? buildInvitePath(detail.id, detail.inviteCode) : undefined),
   };
 
   setGroupSummaryState(summary);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import {
   Card,
@@ -21,6 +21,8 @@ import {
   seedGroups,
   type SeedGroupDetail,
 } from "@/lib/seedData";
+import { useAuth } from "@/contexts/AuthContext";
+import { buildInvitePath, generateInviteCode, parseInviteInput } from "@/lib/utils";
 
 type Group = {
   id: string;
@@ -28,14 +30,21 @@ type Group = {
   description?: string;
   totalBill: number;
   members: number;
+  inviteCode?: string;
+  inviteLink?: string;
 };
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState<Group[]>(seedGroups);
+  const [groups, setGroups] = useState<Group[]>(() => seedGroups.map((group) => ensureInviteFields(group)));
   const [initialized, setInitialized] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
+  const [showJoiner, setShowJoiner] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
+  const [joinLink, setJoinLink] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -47,7 +56,8 @@ export default function GroupsPage() {
       try {
         const parsed = JSON.parse(storedGroups) as Group[];
         if (Array.isArray(parsed)) {
-          setGroups(parsed);
+          const normalized = parsed.map((group) => ensureInviteFields(group));
+          setGroups(normalized);
           setInitialized(true);
           ensureSeededGroupDetails();
           return;
@@ -57,10 +67,9 @@ export default function GroupsPage() {
       }
     }
 
-    window.localStorage.setItem(
-      GROUPS_STORAGE_KEY,
-      JSON.stringify(seedGroups)
-    );
+    const seeded = seedGroups.map((group) => ensureInviteFields(group));
+    setGroups(seeded);
+    window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(seeded));
     notifyDataChanged();
     ensureSeededGroupDetails();
     setInitialized(true);
@@ -80,30 +89,175 @@ export default function GroupsPage() {
     setDescription("");
   };
 
+  const resetJoiner = () => {
+    setJoinLink("");
+    setJoinError(null);
+    setJoinSuccess(null);
+  };
+
   const handleCreateGroup = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!groupName.trim()) {
       return;
     }
 
-    const newGroup: Group = {
-      id: crypto.randomUUID(),
+    const id = crypto.randomUUID();
+    const inviteCode = generateInviteCode();
+    const inviteLink = buildInvitePath(id, inviteCode);
+
+    const newGroup = ensureInviteFields({
+      id,
       name: groupName.trim(),
       description: description.trim() || undefined,
       members: 0,
       totalBill: 0,
-    };
+      inviteCode,
+      inviteLink,
+    });
 
     setGroups((current) => [newGroup, ...current]);
     persistGroupDetail(newGroup.id, {
       id: newGroup.id,
       name: newGroup.name,
       description: newGroup.description,
+      inviteCode: newGroup.inviteCode,
+      inviteLink: newGroup.inviteLink,
       members: [],
       expenses: [],
     });
     resetCreator();
     setShowCreator(false);
+  };
+
+  const handleJoinGroup = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setJoinError(null);
+    setJoinSuccess(null);
+
+    const trimmedLink = joinLink.trim();
+    if (!trimmedLink) {
+      setJoinError("Vui lòng nhập link mời của nhóm.");
+      return;
+    }
+
+    const memberName = user?.name?.trim();
+    if (!memberName) {
+      setJoinError("Vui lòng đăng nhập để tham gia nhóm.");
+      return;
+    }
+
+    const { groupId, inviteCode } = parseInviteInput(trimmedLink);
+    if (!inviteCode) {
+      setJoinError("Link mời không hợp lệ. Vui lòng kiểm tra lại.");
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
+      const parsed = stored
+        ? (JSON.parse(stored) as Record<string, SeedGroupDetail>)
+        : {};
+      const merged: Record<string, SeedGroupDetail> = {
+        ...seedGroupDetails,
+        ...parsed,
+      };
+
+      let detail = groupId ? merged[groupId] : undefined;
+      if (detail && detail.inviteCode && detail.inviteCode !== inviteCode) {
+        detail = undefined;
+      }
+
+      if (!detail) {
+        detail = Object.values(merged).find(
+          (item) => item.inviteCode === inviteCode
+        );
+      }
+
+      if (!detail) {
+        setJoinError("Không tìm thấy nhóm với link được cung cấp.");
+        return;
+      }
+
+      const normalizedDetail: SeedGroupDetail = {
+        ...detail,
+        inviteCode: detail.inviteCode ?? inviteCode,
+        inviteLink: detail.inviteLink ?? buildInvitePath(detail.id, inviteCode),
+        members: Array.isArray(detail.members) ? detail.members : [],
+        expenses: Array.isArray(detail.expenses) ? detail.expenses : [],
+      };
+
+      const alreadyMember = normalizedDetail.members.some(
+        (member) => member.name.toLowerCase() === memberName.toLowerCase()
+      );
+
+      const members = alreadyMember
+        ? normalizedDetail.members
+        : [
+            ...normalizedDetail.members,
+            {
+              id: crypto.randomUUID(),
+              name: memberName,
+              spent: 0,
+              owes: 0,
+            },
+          ];
+
+      const totalBill = normalizedDetail.expenses.reduce(
+        (sum, expense) => sum + expense.amount,
+        0
+      );
+
+      const summary = ensureInviteFields({
+        id: normalizedDetail.id,
+        name: normalizedDetail.name,
+        description: normalizedDetail.description,
+        members: members.length,
+        totalBill,
+        inviteCode: normalizedDetail.inviteCode ?? inviteCode,
+        inviteLink: normalizedDetail.inviteLink,
+      });
+
+      setGroups((current) => {
+        const exists = current.some((group) => group.id === summary.id);
+        if (exists) {
+          return current.map((group) =>
+            group.id === summary.id
+              ? {
+                  ...group,
+                  members: summary.members,
+                  totalBill: summary.totalBill,
+                  inviteCode: summary.inviteCode,
+                  inviteLink: summary.inviteLink,
+                }
+              : group
+          );
+        }
+
+        return [summary, ...current];
+      });
+
+      persistGroupDetail(summary.id, {
+        ...normalizedDetail,
+        inviteCode: summary.inviteCode,
+        inviteLink: summary.inviteLink,
+        members,
+      });
+
+      setJoinSuccess(
+        alreadyMember
+          ? `Bạn đã là thành viên của nhóm ${summary.name}.`
+          : `Đã tham gia nhóm ${summary.name}.`
+      );
+      setJoinLink("");
+    } catch (error) {
+      console.error("Failed to join group", error);
+      setJoinError("Không thể tham gia nhóm. Vui lòng thử lại.");
+    }
   };
 
   const handleDeleteGroup = (groupId: string) => {
@@ -117,22 +271,76 @@ export default function GroupsPage() {
     <MainLayout
       title="Nhóm của tôi"
       rightAction={
-        <Button
-          size="sm"
-          onClick={() => {
-            const nextState = !showCreator;
-            setShowCreator(nextState);
-            if (!nextState) {
-              resetCreator();
-            }
-          }}
-        >
-          <span className="text-lg leading-none mr-2">+</span>
-          {showCreator ? "Đóng" : "Tạo nhóm"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              const nextState = !showCreator;
+              setShowCreator(nextState);
+              if (nextState) {
+                setShowJoiner(false);
+                resetJoiner();
+              } else {
+                resetCreator();
+              }
+            }}
+          >
+            <span className="text-lg leading-none mr-2">+</span>
+            {showCreator ? "Đóng" : "Tạo nhóm"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const nextState = !showJoiner;
+              setShowJoiner(nextState);
+              if (nextState) {
+                setShowCreator(false);
+                resetCreator();
+              } else {
+                resetJoiner();
+              }
+            }}
+          >
+            Vào nhóm
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4">
+        {showJoiner && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Tham gia nhóm</CardTitle>
+              <CardDescription>
+                Dán link mời của nhóm để tham gia cùng mọi người.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleJoinGroup}>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Link mời nhóm</label>
+                  <input
+                    required
+                    value={joinLink}
+                    onChange={(event) => setJoinLink(event.target.value)}
+                    placeholder="Ví dụ: /groups/join?group=1&code=ABCD-1234"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                {joinError ? (
+                  <p className="text-sm text-destructive">{joinError}</p>
+                ) : null}
+                {joinSuccess ? (
+                  <p className="text-sm text-emerald-600">{joinSuccess}</p>
+                ) : null}
+                <Button type="submit" className="w-full">
+                  Vào nhóm
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
         {showCreator && (
           <Card>
             <CardHeader>
@@ -232,6 +440,18 @@ export default function GroupsPage() {
   );
 }
 
+function ensureInviteFields(group: Group): Group {
+  if (!group.inviteCode) {
+    return group;
+  }
+
+  const inviteLink = group.inviteLink ?? buildInvitePath(group.id, group.inviteCode);
+  return {
+    ...group,
+    inviteLink,
+  };
+}
+
 function ensureSeededGroupDetails() {
   if (typeof window === "undefined") {
     return;
@@ -253,9 +473,27 @@ function ensureSeededGroupDetails() {
       ...seedGroupDetails,
       ...parsed,
     };
+
+    const normalized = Object.fromEntries(
+      Object.entries(merged).map(([id, detail]) => {
+        const inviteCode = detail.inviteCode;
+        const inviteLink = detail.inviteLink ?? (inviteCode ? buildInvitePath(id, inviteCode) : undefined);
+        return [
+          id,
+          {
+            ...detail,
+            inviteCode,
+            inviteLink,
+            members: Array.isArray(detail.members) ? detail.members : [],
+            expenses: Array.isArray(detail.expenses) ? detail.expenses : [],
+          },
+        ];
+      })
+    );
+
     window.localStorage.setItem(
       GROUP_DETAIL_STORAGE_KEY,
-      JSON.stringify(merged)
+      JSON.stringify(normalized)
     );
     notifyDataChanged();
   } catch (error) {
@@ -281,7 +519,15 @@ function persistGroupDetail(
     const parsed = stored
       ? (JSON.parse(stored) as Record<string, SeedGroupDetail>)
       : {};
-    const next = { ...parsed, [groupId]: detail };
+    const normalizedDetail: SeedGroupDetail = {
+      ...detail,
+      inviteLink:
+        detail.inviteLink ??
+        (detail.inviteCode ? buildInvitePath(groupId, detail.inviteCode) : undefined),
+      members: Array.isArray(detail.members) ? detail.members : [],
+      expenses: Array.isArray(detail.expenses) ? detail.expenses : [],
+    };
+    const next = { ...parsed, [groupId]: normalizedDetail };
     window.localStorage.setItem(
       GROUP_DETAIL_STORAGE_KEY,
       JSON.stringify(next)

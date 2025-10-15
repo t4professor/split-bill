@@ -10,6 +10,7 @@ import {
   GROUPS_STORAGE_KEY,
 } from "@/lib/constants";
 import { type SeedGroupDetail } from "@/lib/seedData";
+import { buildInvitePath, generateInviteCode } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function NewGroupPage() {
@@ -34,13 +35,18 @@ export default function NewGroupPage() {
 
     setFormError(null);
 
+    const groupId = crypto.randomUUID();
+    const inviteCode = generateInviteCode();
+    const inviteLink = buildInvitePath(groupId, inviteCode);
     const creatorId = crypto.randomUUID();
     const newGroup = {
-      id: crypto.randomUUID(),
+      id: groupId,
       name: groupName.trim(),
       description: description.trim() || undefined,
       members: 1,
       totalBill: 0,
+      inviteCode,
+      inviteLink,
     };
 
     const stored = typeof window !== "undefined"
@@ -76,6 +82,8 @@ export default function NewGroupPage() {
         id: newGroup.id,
         name: newGroup.name,
         description: newGroup.description,
+        inviteCode,
+        inviteLink,
         members: [
           {
             id: creatorId,
