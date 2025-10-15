@@ -1,3 +1,5 @@
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import {
   Controller,
   Post,
@@ -28,11 +30,35 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+
+@ApiBearerAuth()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  // Admin: Get all users
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/all')
+  @ApiOperation({ summary: 'Admin: Get all users' })
+  async getAllUsers() {
+    return this.userService.getAllUsers();
+  }
+
+  // Admin: Get user by ID
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/:id')
+  @ApiOperation({ summary: 'Admin: Get user by ID' })
+  async getUserById(@Param('id') id: string) {
+    const user = await this.userService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    // remove sensitive fields
+    const { password, ...safeUser } = user;
+    return safeUser;
+  }
 
   // Upload avatar
   @UseGuards(JwtAuthGuard)
