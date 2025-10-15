@@ -11,11 +11,15 @@ import { GroupService } from './group.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ExpenseService } from '../expense/expense.service';
 
 @Controller('groups')
 @UseGuards(JwtAuthGuard)
 export class GroupController {
-  constructor(private readonly groupService: GroupService) {}
+  constructor(
+    private readonly groupService: GroupService,
+    private readonly expenseService: ExpenseService
+  ) {}
 
   @Post()
   createGroup(@Request() req: any, @Body() createGroupDto: CreateGroupDto) {
@@ -39,5 +43,10 @@ export class GroupController {
     @Request() req: any,
   ) {
     return this.groupService.addMember(id, addMemberDto, req.user.sub);
+  }
+
+  @Get(':id/expenses')
+  getGroupExpenses(@Param('id') id: string, @Request() req: any) {
+    return this.expenseService.getGroupExpenses(id, req.user.sub);
   }
 }

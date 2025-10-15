@@ -20,9 +20,4 @@ export class ExpenseController {
   createExpense(@Request() req: any, @Body() createExpenseDto: CreateExpenseDto) {
     return this.expenseService.createExpense(req.user.sub, createExpenseDto);
   }
-
-  @Get('group/:groupId')
-  getGroupExpenses(@Param('groupId') groupId: string, @Request() req: any) {
-    return this.expenseService.getGroupExpenses(groupId, req.user.sub);
-  }
 }
