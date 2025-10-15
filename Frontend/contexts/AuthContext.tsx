@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 interface User {
   name: string;
   email: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -21,6 +22,7 @@ interface AuthContextType {
     name?: string;
     email?: string;
     phone?: string;
+    avatarUrl?: string | null;
   }) => void;
   logout: () => void;
   isLoading: boolean;
@@ -78,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void password;
 
     const fakeToken = btoa(`${email}:${Date.now()}`);
-    const userData: User = { name: email.split("@")[0] || email, email };
+  const userData: User = { name: email.split("@")[0] || email, email };
 
     localStorage.setItem("token", fakeToken);
     localStorage.setItem("user", JSON.stringify(userData));
@@ -121,6 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     name?: string;
     email?: string;
     phone?: string;
+    avatarUrl?: string | null;
   }) => {
     // update localStorage user object
     try {
@@ -130,12 +133,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         ...parsed,
         ...(data.name ? { name: data.name } : {}),
         ...(data.email ? { email: data.email } : {}),
+        ...(data.avatarUrl !== undefined
+          ? data.avatarUrl === null
+            ? { avatarUrl: undefined }
+            : { avatarUrl: data.avatarUrl }
+          : {}),
       };
       localStorage.setItem("user", JSON.stringify(next));
       if (data.phone !== undefined) {
         localStorage.setItem("phone", data.phone);
       }
-      setUser(next as User);
+      const sanitized = { ...next };
+      if (data.avatarUrl === null) {
+        delete sanitized.avatarUrl;
+      }
+      setUser(sanitized as User);
     } catch {
       // ignore
     }
