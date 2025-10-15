@@ -1,3 +1,6 @@
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import {
   Controller,
   Post,
@@ -28,11 +31,44 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+
+@ApiTags('user')
+@ApiBearerAuth()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  // Update user password
+  @ApiOperation({ summary: "Update user's password" })
+  @UseGuards(JwtAuthGuard)
+  @Patch('update-password')
+  async updatePassword(@Req() req, @Body() dto: UpdatePasswordDto) {
+    return this.userService.updatePassword(req.user.id, dto);
+  }
+
+  // Admin: Get all users
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/all')
+  @ApiOperation({ summary: 'Admin: Get all users' })
+  async getAllUsers() {
+    return this.userService.getAllUsers();
+  }
+
+  // Admin: Get user by ID
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('admin/:id')
+  @ApiOperation({ summary: 'Admin: Get user by ID' })
+  async getUserById(@Param('id') id: string) {
+    const user = await this.userService.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    // remove sensitive fields
+    const { password, ...safeUser } = user;
+    return safeUser;
+  }
 
   // Upload avatar
   @UseGuards(JwtAuthGuard)
@@ -44,6 +80,21 @@ export class UserController {
       limits: { fileSize: MAX_FILE_SIZE },
     }),
   )
+  @ApiOperation({ summary: 'Upload user avatar' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload an image file',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully' })
   async uploadAvatar(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
@@ -63,6 +114,20 @@ export class UserController {
       limits: { fileSize: MAX_FILE_SIZE },
     }),
   )
+  @ApiOperation({ summary: 'Upload payment QR' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload an image file',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
   async uploadPaymentQr(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
@@ -74,6 +139,7 @@ export class UserController {
 
   // 🖼 Get avatar by user ID
   @Get(':id/avatar')
+  @ApiOperation({ summary: 'Get user avatar by ID' })
   async getAvatar(@Param('id') id: string, @Res() res: Response) {
     const user = await this.userService.findById(String(id));
     if (!user?.avatarPath) throw new NotFoundException('Avatar not found');
@@ -86,6 +152,7 @@ export class UserController {
 
   // Get payment QR by user ID
   @Get(':id/payment-qr')
+  @ApiOperation({ summary: 'Get user payment QR by ID' })
   async getPaymentQr(@Param('id') id: string, @Res() res: Response) {
     const targetUser = await this.userService.findById(String(id));
     if (!targetUser?.paymentQrPath)
@@ -99,6 +166,7 @@ export class UserController {
   // Get current user's profile
   @UseGuards(JwtAuthGuard)
   @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@Req() req) {
     const user = await this.userService.findById(req.user.id);
     if (!user) throw new NotFoundException('User not found');

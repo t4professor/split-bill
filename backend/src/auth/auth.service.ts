@@ -79,6 +79,7 @@ export class AuthService {
         userName: user.userName,
         email: user.email,
         phoneNumber: user.phoneNumber,
+        role: user.role,
       },
     };
   }
@@ -91,7 +92,20 @@ export class AuthService {
         userName: true,
         email: true,
         phoneNumber: true,
+        role: true,
       },
     });
+  }
+
+  async validate(payload: any): Promise<any> {
+    const user = await this.validateUserById(payload.sub);
+    if (!user) return null;
+    return {
+      sub: user.id,
+      id: user.id,
+      userName: user.userName,
+      email: user.email,
+      role: user.role,
+    };
   }
 }

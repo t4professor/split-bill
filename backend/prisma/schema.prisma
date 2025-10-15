@@ -30,6 +30,7 @@ model User {
   // Relations
   groupsCreated GroupMember[] @relation("UserGroups")
   createdGroups Group[]       @relation("GroupCreator")
+  expenses      Expense[]     @relation("UserExpenses")
 }
 
 model Group {
@@ -43,6 +44,7 @@ model Group {
 
   // Relations
   members     GroupMember[]
+  expenses    Expense[]
 }
 
 model GroupMember {
@@ -54,6 +56,18 @@ model GroupMember {
   joinedAt  DateTime @default(now())
 
   @@unique([groupId, userId])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  description String
+  amount      Float
+  paidById    String
+  paidBy      User     @relation("UserExpenses", fields: [paidById], references: [id])
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum Role {
