@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MemberSelector } from "@/components/ui/MemberSelector";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -349,7 +350,9 @@ export default function GroupDetailPage() {
                     <div className="flex-1">
                       <p className="font-medium">{expense.description}</p>
                       <p className="text-sm text-muted-foreground">
-                        {expense.paidBy} thanh toán
+                        {members.find((m) => m.id === expense.paidBy)?.name ||
+                          expense.paidBy}{" "}
+                        thanh toán
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(expense.date).toLocaleDateString("vi-VN")}
@@ -377,22 +380,18 @@ export default function GroupDetailPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAddExpense} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium">Người chi</label>
-                  <Input
-                    type="text"
-                    value={newExpense.paidBy}
-                    onChange={(event) =>
-                      setNewExpense({
-                        ...newExpense,
-                        paidBy: event.target.value,
-                      })
-                    }
-                    placeholder="Nguyễn Văn A"
-                    required
-                    className="text-sm"
-                  />
-                </div>
+                <MemberSelector
+                  members={members}
+                  value={newExpense.paidBy}
+                  onChange={(value) =>
+                    setNewExpense({ ...newExpense, paidBy: value as string })
+                  }
+                  label="Người chi"
+                  placeholder="Chọn người chi"
+                  required
+                  multiple={false}
+                />
+
                 <div>
                   <label className="block text-sm font-medium">Số tiền</label>
 
@@ -427,59 +426,19 @@ export default function GroupDetailPage() {
                     className="text-sm"
                   />
                   <div className="pt-4">
-                    <label className="block text-sm font-medium">
-                      Thành viên của chi tiêu này
-                    </label>
-                    <Select
-                      onValueChange={(value) => {
-                        setNewExpense((prev) => {
-                          const participantIds = prev.participantIds.includes(
-                            value
-                          )
-                            ? prev.participantIds.filter((id) => id !== value)
-                            : [...prev.participantIds, value];
-                          return { ...prev, participantIds };
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn thành viên" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {newExpense.participantIds.map((id) => {
-                        const member = members.find((m) => m.id === id);
-                        return (
-                          <span
-                            key={id}
-                            className="bg-gray-200 px-2 py-1 rounded"
-                          >
-                            {member?.name}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNewExpense((prev) => ({
-                                  ...prev,
-                                  participantIds: prev.participantIds.filter(
-                                    (pid) => pid !== id
-                                  ),
-                                }))
-                              }
-                              className="ml-1 text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
+                    <MemberSelector
+                      members={members}
+                      value={newExpense.participantIds}
+                      onChange={(value) =>
+                        setNewExpense({
+                          ...newExpense,
+                          participantIds: value as string[],
+                        })
+                      }
+                      label="Thành viên của chi tiêu này"
+                      placeholder="Chọn thành viên"
+                      multiple={true}
+                    />
                   </div>
                 </div>
                 <Button type="submit" className="w-full">
@@ -560,10 +519,7 @@ function writeGroupSummaries(summaries: GroupSummary[]): void {
     return;
   }
 
-  window.localStorage.setItem(
-    GROUPS_STORAGE_KEY,
-    JSON.stringify(summaries)
-  );
+  window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
   notifyDataChanged();
   window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
 }
