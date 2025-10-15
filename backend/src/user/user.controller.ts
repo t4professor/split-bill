@@ -31,9 +31,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 
+@ApiTags('user')
 @ApiBearerAuth()
 @Controller('user')
 export class UserController {
