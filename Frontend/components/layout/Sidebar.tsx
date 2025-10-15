@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Home, Users, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface SidebarProps {
@@ -61,6 +61,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             >
               <div className="flex items-center gap-3">
                 <Avatar>
+                  {user?.avatarUrl ? (
+                    <AvatarImage src={user.avatarUrl} alt={user.name || 'Avatar'} />
+                  ) : null}
                   <AvatarFallback>
                     {user?.name?.[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>

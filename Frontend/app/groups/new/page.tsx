@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,16 @@ import {
   GROUPS_STORAGE_KEY,
 } from "@/lib/constants";
 import { type SeedGroupDetail } from "@/lib/seedData";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function NewGroupPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const creatorName = useMemo(() => user?.name?.trim() ?? "", [user]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,11 +27,19 @@ export default function NewGroupPage() {
       return;
     }
 
+    if (!creatorName) {
+      setFormError("Vui lòng đăng nhập để tạo nhóm và tham gia nhóm.");
+      return;
+    }
+
+    setFormError(null);
+
+    const creatorId = crypto.randomUUID();
     const newGroup = {
       id: crypto.randomUUID(),
       name: groupName.trim(),
       description: description.trim() || undefined,
-      members: 0,
+      members: 1,
       totalBill: 0,
     };
 
@@ -63,7 +76,14 @@ export default function NewGroupPage() {
         id: newGroup.id,
         name: newGroup.name,
         description: newGroup.description,
-        members: [],
+        members: [
+          {
+            id: creatorId,
+            name: creatorName,
+            spent: 0,
+            owes: 0,
+          },
+        ],
         expenses: [],
       };
       window.localStorage.setItem(
@@ -84,6 +104,9 @@ export default function NewGroupPage() {
         onSubmit={handleSubmit}
         className="max-w-xl mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded shadow space-y-4"
       >
+        {formError ? (
+          <p className="text-sm text-destructive">{formError}</p>
+        ) : null}
         <div>
           <label className="block text-sm font-medium">Tên nhóm</label>
           <Input

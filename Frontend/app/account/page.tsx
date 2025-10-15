@@ -1,22 +1,26 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function AccountPage() {
   const { user, isAuthenticated, isLoading, updateProfile } = useAuth();
   const router = useRouter();
   // hooks - always run
   const [isEditing, setIsEditing] = useState(false);
-  const [nameInput, setNameInput] = useState(user?.name || "");
-  const [emailInput, setEmailInput] = useState(user?.email || "");
-  const [phoneInput, setPhoneInput] = useState(
-    typeof window !== "undefined" ? localStorage.getItem("phone") || "" : ""
-  );
+  const readStoredPhone = () =>
+    (typeof window !== "undefined" ? localStorage.getItem("phone") ?? "" : "");
+
+  const [nameInput, setNameInput] = useState(user?.name ?? "");
+  const [emailInput, setEmailInput] = useState(user?.email ?? "");
+  const [phoneInput, setPhoneInput] = useState<string>(() => readStoredPhone());
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -25,19 +29,58 @@ export default function AccountPage() {
   }, [isLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    setNameInput(user?.name || "");
-    setEmailInput(user?.email || "");
+    setNameInput(user?.name ?? "");
+    setEmailInput(user?.email ?? "");
+    setPhoneInput(readStoredPhone);
+    setAvatarPreview(user?.avatarUrl ?? null);
   }, [user]);
+
+  const resetForm = () => {
+    setNameInput(user?.name ?? "");
+    setEmailInput(user?.email ?? "");
+    setPhoneInput(readStoredPhone);
+    setAvatarPreview(user?.avatarUrl ?? null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSelectAvatar = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      setAvatarPreview(result);
+    };
+    reader.onerror = () => {
+      setAvatarPreview(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("AccountPage: save clicked", {
-      nameInput,
-      emailInput,
-      phoneInput,
+    updateProfile({
+      name: nameInput,
+      email: emailInput,
+      phone: phoneInput,
+      avatarUrl: avatarPreview ?? null,
     });
-    // update in AuthContext and localStorage
-    updateProfile({ name: nameInput, email: emailInput, phone: phoneInput });
     setIsEditing(false);
   };
 
@@ -56,6 +99,43 @@ export default function AccountPage() {
         {isEditing && (
           <span className="text-sm text-yellow-600">Đang chỉnh sửa</span>
         )}
+      </div>
+
+      <div className="flex flex-col items-center gap-3 pb-4">
+        <Avatar className="h-24 w-24">
+          {avatarPreview ? (
+            <AvatarImage src={avatarPreview} alt={user?.name ?? "Avatar"} />
+          ) : (
+            <AvatarFallback>
+              {(user?.name || user?.email || "?")
+                .charAt(0)
+                .toUpperCase()}
+            </AvatarFallback>
+          )}
+        </Avatar>
+        {isEditing ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarFileChange}
+            />
+            <Button type="button" size="sm" onClick={handleSelectAvatar}>
+              Chọn ảnh mới
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleRemoveAvatar}
+              disabled={!avatarPreview}
+            >
+              Gỡ ảnh
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <form onSubmit={handleSave} className="space-y-4">
@@ -104,7 +184,7 @@ export default function AccountPage() {
                 type="button"
                 variant="ghost"
                 onClick={() => {
-                  console.log("AccountPage: cancel clicked");
+                  resetForm();
                   setIsEditing(false);
                 }}
               >
@@ -120,7 +200,7 @@ export default function AccountPage() {
           <Button
             type="button"
             onClick={() => {
-              console.log("AccountPage: edit clicked");
+              resetForm();
               setIsEditing(true);
             }}
           >
