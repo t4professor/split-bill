@@ -1,3 +1,4 @@
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import {
@@ -37,6 +38,14 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  // Update user password
+  @ApiOperation({ summary: "Update user's password" })
+  @UseGuards(JwtAuthGuard)
+  @Patch('update-password')
+  async updatePassword(@Req() req, @Body() dto: UpdatePasswordDto) {
+    return this.userService.updatePassword(req.user.id, dto);
+  }
 
   // Admin: Get all users
   @UseGuards(JwtAuthGuard, RolesGuard)
