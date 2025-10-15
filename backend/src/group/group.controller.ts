@@ -25,21 +25,25 @@ export class GroupController {
   ) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new group' })
   createGroup(@Request() req: any, @Body() createGroupDto: CreateGroupDto) {
     return this.groupService.createGroup(req.user.sub, createGroupDto);
   }
 
   @Get()
+  @ApiOperation({ summary: 'Get all groups for current user' })
   getUserGroups(@Request() req: any) {
     return this.groupService.getUserGroups(req.user.sub);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get group details by ID' })
   getGroupById(@Param('id') id: string, @Request() req: any) {
     return this.groupService.getGroupById(id, req.user.sub);
   }
 
   @Post(':id/members')
+  @ApiOperation({ summary: 'Add a member to group' })
   addMember(
     @Param('id') id: string,
     @Body() addMemberDto: AddMemberDto,
@@ -55,10 +59,7 @@ export class GroupController {
   }
 
   @Get(':id/settlement')
-  @ApiOperation({
-    summary: 'Calculate settlement for a group',
-    description: 'Calculates total expenses, fair share per person, individual balances, and minimum transactions needed to settle all debts'
-  })
+  @ApiOperation({ summary: 'Calculate settlement for a group' })
   getSettlement(@Param('id') id: string, @Request() req: any) {
     return this.groupService.calculateSettlement(id, req.user.sub);
   }

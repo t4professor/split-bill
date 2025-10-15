@@ -139,6 +139,7 @@ export class UserController {
 
   // 🖼 Get avatar by user ID
   @Get(':id/avatar')
+  @ApiOperation({ summary: 'Get user avatar by ID' })
   async getAvatar(@Param('id') id: string, @Res() res: Response) {
     const user = await this.userService.findById(String(id));
     if (!user?.avatarPath) throw new NotFoundException('Avatar not found');
@@ -151,6 +152,7 @@ export class UserController {
 
   // Get payment QR by user ID
   @Get(':id/payment-qr')
+  @ApiOperation({ summary: 'Get user payment QR by ID' })
   async getPaymentQr(@Param('id') id: string, @Res() res: Response) {
     const targetUser = await this.userService.findById(String(id));
     if (!targetUser?.paymentQrPath)
@@ -164,6 +166,7 @@ export class UserController {
   // Get current user's profile
   @UseGuards(JwtAuthGuard)
   @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
   async getProfile(@Req() req) {
     const user = await this.userService.findById(req.user.id);
     if (!user) throw new NotFoundException('User not found');
