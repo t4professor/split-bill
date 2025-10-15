@@ -37,6 +37,7 @@ model Group {
   id          String        @id @default(uuid())
   name        String
   description String?
+  inviteCode  String        @unique
   createdById String
   createdBy   User          @relation("GroupCreator", fields: [createdById], references: [id])
   createdAt   DateTime      @default(now())

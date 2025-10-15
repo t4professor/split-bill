@@ -11,6 +11,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { GroupService } from './group.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { JoinGroupDto } from './dto/join-group.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ExpenseService } from '../expense/expense.service';
 
@@ -62,5 +63,11 @@ export class GroupController {
   @ApiOperation({ summary: 'Calculate settlement for a group' })
   getSettlement(@Param('id') id: string, @Request() req: any) {
     return this.groupService.calculateSettlement(id, req.user.sub);
+  }
+
+  @Post('join')
+  @ApiOperation({ summary: 'Join a group using invite code' })
+  joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
+    return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
   }
 }

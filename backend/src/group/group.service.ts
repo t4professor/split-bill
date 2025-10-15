@@ -8,12 +8,41 @@ import { SettlementResponse, MemberBalance, Transaction } from './dto/settlement
 export class GroupService {
   constructor(private prisma: PrismaService) {}
 
+  // Helper: Generate unique invite code
+  private generateInviteCode(): string {
+    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars: 0,O,1,I
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return code;
+  }
+
+  // Helper: Generate unique invite code that doesn't exist in DB
+  private async generateUniqueInviteCode(): Promise<string> {
+    let code: string;
+    let exists = true;
+
+    while (exists) {
+      code = this.generateInviteCode();
+      const existingGroup = await this.prisma.group.findUnique({
+        where: { inviteCode: code },
+      });
+      exists = !!existingGroup;
+    }
+
+    return code;
+  }
+
   // Create a new group
   async createGroup(userId: string, data: CreateGroupDto) {
+    const inviteCode = await this.generateUniqueInviteCode();
+
     const group = await this.prisma.group.create({
       data: {
         name: data.name,
         description: data.description,
+        inviteCode: inviteCode,
         createdById: userId,
         members: {
           create: {
@@ -301,5 +330,52 @@ export class GroupService {
     }
 
     return transactions;
+  }
+
+  // Join group by invite code
+  async joinGroupByInviteCode(inviteCode: string, userId: string) {
+    // Find group by invite code
+    const group = await this.prisma.group.findUnique({
+      where: { inviteCode: inviteCode.toUpperCase() },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Invalid invite code');
+    }
+
+    // Check if user is already a member
+    const isAlreadyMember = group.members.some((m) => m.userId === userId);
+    if (isAlreadyMember) {
+      throw new BadRequestException('You are already a member of this group');
+    }
+
+    // Add user to group
+    const member = await this.prisma.groupMember.create({
+      data: {
+        groupId: group.id,
+        userId: userId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            userName: true,
+            email: true,
+          },
+        },
+        group: {
+          select: {
+            id: true,
+            name: true,
+            inviteCode: true,
+          },
+        },
+      },
+    });
+
+    return { message: 'Successfully joined group', member };
   }
 }
