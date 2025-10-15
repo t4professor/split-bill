@@ -28,7 +28,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('user')
 export class UserController {
@@ -44,6 +44,21 @@ export class UserController {
       limits: { fileSize: MAX_FILE_SIZE },
     }),
   )
+  @ApiOperation({ summary: 'Upload user avatar' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload an image file',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully' })
   async uploadAvatar(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
@@ -63,6 +78,20 @@ export class UserController {
       limits: { fileSize: MAX_FILE_SIZE },
     }),
   )
+  @ApiOperation({ summary: 'Upload payment QR' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload an image file',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
   async uploadPaymentQr(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
