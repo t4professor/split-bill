@@ -37,6 +37,12 @@ export class GroupController {
     return this.groupService.getUserGroups(req.user.sub);
   }
 
+  @Post('join')
+  @ApiOperation({ summary: 'Join a group using invite code' })
+  joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
+    return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get group details by ID' })
   getGroupById(@Param('id') id: string, @Request() req: any) {
@@ -63,11 +69,5 @@ export class GroupController {
   @ApiOperation({ summary: 'Calculate settlement for a group' })
   getSettlement(@Param('id') id: string, @Request() req: any) {
     return this.groupService.calculateSettlement(id, req.user.sub);
-  }
-
-  @Post('join')
-  @ApiOperation({ summary: 'Join a group using invite code' })
-  joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
-    return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
   }
 }
