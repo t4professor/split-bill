@@ -26,6 +26,12 @@ import {
 // API Configuration
 const API_BASE_URL = "http://localhost:3001";
 
+// Extended Error type for API errors
+interface ApiErrorWithStatus extends Error {
+  statusCode?: number;
+  error?: string;
+}
+
 // Generic API request handler with JWT support
 async function apiRequest<T>(
   endpoint: string,
@@ -71,9 +77,9 @@ async function apiRequest<T>(
       // Create a more descriptive error message
       const errorMessage =
         errorData.message || getErrorMessage(response.status);
-      const error = new Error(errorMessage);
-      (error as any).statusCode = errorData.statusCode || response.status;
-      (error as any).error = errorData.error;
+      const error = new Error(errorMessage) as ApiErrorWithStatus;
+      error.statusCode = errorData.statusCode || response.status;
+      error.error = errorData.error;
 
       throw error;
     }
@@ -146,12 +152,7 @@ export const authApi = {
     return response.json();
   },
 
-  async removeAvatar(): Promise<{ message: string }> {
-    return apiRequest<{ message: string }>("/user/remove-avatar", {
-      method: "PATCH",
-    });
-  },
-
+  // Upload payment QR code
   async uploadPaymentQr(
     file: File
   ): Promise<{ message: string; path: string }> {
@@ -228,16 +229,16 @@ export const groupApi = {
     });
   },
 
-  // Join group using invite link (URL param)
-  async joinGroupByLink(inviteCode: string): Promise<JoinGroupResponse> {
-    return apiRequest<JoinGroupResponse>(`/groups/join/${inviteCode}`, {
+  // Get all expenses in a group
+  async getGroupExpenses(groupId: string): Promise<Expense[]> {
+    return apiRequest<Expense[]>(`/groups/${groupId}/expenses`, {
       method: "GET",
     });
   },
 
-  // Get all expenses in a group
-  async getGroupExpenses(groupId: string): Promise<Expense[]> {
-    return apiRequest<Expense[]>(`/groups/${groupId}/expenses`, {
+  // Join group using invite link (URL param)
+  async joinGroupByLink(inviteCode: string): Promise<JoinGroupResponse> {
+    return apiRequest<JoinGroupResponse>(`/groups/join/${inviteCode}`, {
       method: "GET",
     });
   },
@@ -341,10 +342,11 @@ export const retryRequest = async <T>(
       lastError = error as Error;
 
       // Don't retry on client errors (4xx)
+      const errorWithStatus = lastError as ApiErrorWithStatus;
       if (
         lastError instanceof Error &&
-        (lastError as any).statusCode &&
-        (lastError as any).statusCode < 500
+        errorWithStatus.statusCode &&
+        errorWithStatus.statusCode < 500
       ) {
         throw lastError;
       }
@@ -364,10 +366,12 @@ export const retryRequest = async <T>(
   throw lastError!;
 };
 
+// Utility to get avatar URL
 export const getAvatarUrl = (userId: string): string => {
   return `${API_BASE_URL}/user/${userId}/avatar`;
 };
 
+// Utility to get payment QR URL
 export const getPaymentQrUrl = (userId: string): string => {
   return `${API_BASE_URL}/user/${userId}/payment-qr`;
 };

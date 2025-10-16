@@ -1,417 +1,462 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus, TrendingUp, Users, Receipt, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { MainLayout } from "@/components/layout/MainLayout";
 import {
-  GROUP_DETAIL_STORAGE_KEY,
-  GROUPS_STORAGE_KEY,
-} from '@/lib/constants';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
-  seedGroupDetails,
-  seedGroups,
-  type SeedGroupDetail,
-} from '@/lib/seedData';
+  Plus,
+  TrendingUp,
+  Users,
+  Receipt,
+  ArrowRight,
+  Loader2,
+  Activity,
+} from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
+import { groupApi } from "@/lib/api";
+import type { Group, Expense } from "@/lib/types";
 
-type GroupSummary = {
-  id: string;
-  name: string;
-  description?: string;
-  members: number;
-  totalBill: number;
+// Types
+type GroupWithExpenses = Group & {
+  totalExpenses: number;
+  totalAmount: number;
+  recentExpenses: Expense[];
 };
 
 type RecentActivity = {
   id: string;
-  type: 'expense';
-  group: string;
+  type: "expense";
+  groupId: string;
+  groupName: string;
   description: string;
   amount: number;
-  timestamp?: number;
-  timeLabel: string;
+  paidBy: string;
+  timestamp: string;
 };
 
 const QUICK_ACTIONS = [
   {
     icon: Plus,
-    label: 'Tạo nhóm mới',
-    description: 'Bắt đầu chia bill với bạn bè',
-    href: '/groups/new',
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-  },
-  {
-    icon: Receipt,
-    label: 'Thêm chi phí',
-    description: 'Ghi lại khoản chi tiêu',
-    href: '/expenses/new',
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
+    label: "Tạo nhóm mới",
+    description: "Bắt đầu chia bill với bạn bè",
+    href: "/groups/new",
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
   },
   {
     icon: Users,
-    label: 'Xem nhóm',
-    description: 'Quản lý các nhóm của bạn',
-    href: '/groups',
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
+    label: "Xem nhóm",
+    description: "Quản lý các nhóm của bạn",
+    href: "/groups",
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
   },
 ];
 
+// Helper functions
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatRelativeTime = (timestamp: string): string => {
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Vừa xong";
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+  
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 export default function HomePage() {
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
+
+  const [groups, setGroups] = useState<GroupWithExpenses[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalGroups: 0,
     totalExpenses: 0,
     totalAmount: 0,
-    pendingSettlements: 0,
   });
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [groupSummaries, setGroupSummaries] = useState<GroupSummary[]>([]);
 
-  const ensureSeedData = useCallback(() => {
-    if (typeof window === 'undefined') {
+  const loadDashboardData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setIsLoading(false);
       return;
     }
 
-    const storedGroups = window.localStorage.getItem(GROUPS_STORAGE_KEY);
-    if (!storedGroups) {
-      window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(seedGroups));
-    }
+    setIsLoading(true);
+    try {
+      // 1. Load all groups
+      const groupsResponse = await groupApi.getUserGroups();
+      const userGroups = groupsResponse.groups;
 
-    const storedDetails = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
-    if (!storedDetails) {
-      window.localStorage.setItem(
-        GROUP_DETAIL_STORAGE_KEY,
-        JSON.stringify(seedGroupDetails)
+      if (userGroups.length === 0) {
+        setGroups([]);
+        setRecentActivities([]);
+        setStats({
+          totalGroups: 0,
+          totalExpenses: 0,
+          totalAmount: 0,
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Load expenses for each group
+      const groupsWithExpenses = await Promise.all(
+        userGroups.map(async (group) => {
+          try {
+            const expensesResponse = await groupApi.getGroupExpenses(group.id);
+            const expenses = expensesResponse.expenses;
+
+            const totalAmount = expenses.reduce(
+              (sum, expense) => sum + expense.amount,
+              0
+            );
+
+            // Get 3 most recent expenses
+            const recentExpenses = expenses
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime()
+              )
+              .slice(0, 3);
+
+            return {
+              ...group,
+              totalExpenses: expenses.length,
+              totalAmount,
+              recentExpenses,
+            } as GroupWithExpenses;
+          } catch (error) {
+            console.error(`Failed to load expenses for group ${group.id}`, error);
+            return {
+              ...group,
+              totalExpenses: 0,
+              totalAmount: 0,
+              recentExpenses: [],
+            } as GroupWithExpenses;
+          }
+        })
       );
-    }
-  }, []);
 
-  const loadDashboardData = useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+      setGroups(groupsWithExpenses);
 
-    ensureSeedData();
+      // 3. Aggregate statistics
+      const totalExpenses = groupsWithExpenses.reduce(
+        (sum, group) => sum + group.totalExpenses,
+        0
+      );
+      const totalAmount = groupsWithExpenses.reduce(
+        (sum, group) => sum + group.totalAmount,
+        0
+      );
 
-    let summaries: GroupSummary[] = seedGroups;
-    let details: Record<string, SeedGroupDetail> = seedGroupDetails;
+      setStats({
+        totalGroups: groupsWithExpenses.length,
+        totalExpenses,
+        totalAmount,
+      });
 
-    const groupsRaw = window.localStorage.getItem(GROUPS_STORAGE_KEY);
-    if (groupsRaw) {
-      try {
-        const parsed = JSON.parse(groupsRaw) as GroupSummary[];
-        if (Array.isArray(parsed)) {
-          summaries = parsed;
-        }
-      } catch (error) {
-        console.error('Failed to parse stored groups', error);
-      }
-    }
-
-    const detailsRaw = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
-    if (detailsRaw) {
-      try {
-        const parsed = JSON.parse(detailsRaw) as Record<string, SeedGroupDetail>;
-        if (parsed && typeof parsed === 'object') {
-          details = parsed;
-        }
-      } catch (error) {
-        console.error('Failed to parse stored group details', error);
-      }
-    }
-
-    const relevantDetails = summaries
-      .map((summary) => details[summary.id])
-      .filter((detail): detail is SeedGroupDetail => Boolean(detail));
-
-    const enrichedSummaries = summaries
-      .map((summary) => {
-        const detail = details[summary.id];
-        if (!detail) {
-          return summary;
-        }
-
-        const totalBill = detail.expenses.reduce(
-          (sum, expense) => sum + expense.amount,
-          0
-        );
-
-        return {
-          ...summary,
-          members: detail.members.length,
-          totalBill,
-        } satisfies GroupSummary;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-
-    const totalExpenses = relevantDetails.reduce(
-      (sum, detail) => sum + detail.expenses.length,
-      0
-    );
-    const totalAmount = enrichedSummaries.reduce(
-      (sum, summary) => sum + summary.totalBill,
-      0
-    );
-
-    setGroupSummaries(enrichedSummaries);
-
-    setStats({
-      totalGroups: enrichedSummaries.length,
-      totalExpenses,
-      totalAmount,
-      pendingSettlements: 0,
-    });
-
-    const activities: RecentActivity[] = relevantDetails
-      .flatMap((detail) =>
-        detail.expenses.map((expense) => {
-          const timestamp = expense.date ? new Date(expense.date).getTime() : undefined;
-          return {
-            id: `${detail.id}-${expense.id}`,
-            type: 'expense' as const,
-            group: detail.name,
+      // 4. Collect recent activities from all groups
+      const allActivities: RecentActivity[] = groupsWithExpenses.flatMap(
+        (group) =>
+          group.recentExpenses.map((expense) => ({
+            id: expense.id,
+            type: "expense" as const,
+            groupId: group.id,
+            groupName: group.name,
             description: expense.description,
             amount: expense.amount,
-            timestamp,
-            timeLabel: timestamp
-              ? new Date(timestamp).toLocaleString('vi-VN')
-              : 'Chưa rõ thời gian',
-          } satisfies RecentActivity;
-        })
-      )
-      .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
-      .slice(0, 5);
+            paidBy: expense.paidBy.userName,
+            timestamp: expense.createdAt,
+          }))
+      );
 
-    setRecentActivities(activities);
-  }, [ensureSeedData]);
+      // Sort by timestamp and take top 5
+      const sortedActivities = allActivities
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+        .slice(0, 5);
+
+      setRecentActivities(sortedActivities);
+    } catch (error) {
+      console.error("Failed to load dashboard data", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadDashboardData();
-
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const handleStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === GROUPS_STORAGE_KEY || event.key === GROUP_DETAIL_STORAGE_KEY) {
-        loadDashboardData();
-      }
-    };
-
-    const handleDataChanged = () => loadDashboardData();
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('sb:data-changed', handleDataChanged as EventListener);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('sb:data-changed', handleDataChanged as EventListener);
-    };
   }, [loadDashboardData]);
+
+  if (!isAuthenticated) {
+    return (
+      <MainLayout title="Trang chủ">
+        <div className="flex flex-col items-center justify-center py-12">
+          <Users className="mb-4 h-16 w-16 text-muted-foreground" />
+          <h2 className="mb-2 text-xl font-semibold">Chào mừng đến Split Bill</h2>
+          <p className="mb-6 text-center text-muted-foreground">
+            Vui lòng đăng nhập để bắt đầu quản lý chi tiêu nhóm
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={() => router.push("/login")}>Đăng nhập</Button>
+            <Button variant="outline" onClick={() => router.push("/register")}>
+              Đăng ký
+            </Button>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout title="Trang chủ">
       <div className="space-y-6">
-        {/* Welcome Banner */}
-        <Card className="bg-gradient-to-br from-blue-500 to-purple-600 text-white border-0">
+        {/* Welcome Section */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Xin chào! 👋</CardTitle>
-            <CardDescription className="text-blue-50">
-              Hãy bắt đầu quản lý chi tiêu nhóm của bạn
+            <CardTitle>Xin chào, {user?.userName || "Bạn"}! 👋</CardTitle>
+            <CardDescription>
+              Chào mừng trở lại. Đây là tổng quan về các nhóm và hoạt động của
+              bạn.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Link href="/groups/new">
-              <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-                <Plus className="mr-2 h-5 w-5" />
-                Tạo nhóm mới
-              </Button>
-            </Link>
-          </CardContent>
         </Card>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Nhóm</p>
-                  <p className="text-2xl font-bold">{stats.totalGroups}</p>
-                </div>
-                <Users className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Chi phí</p>
-                  <p className="text-2xl font-bold">{stats.totalExpenses}</p>
-                </div>
-                <Receipt className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="col-span-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Tổng chi tiêu</p>
-                  <p className="text-2xl font-bold">
-                    {stats.totalAmount.toLocaleString('vi-VN')}đ
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Thao tác nhanh</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Link key={action.label} href={action.href}>
-                  <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-accent transition-colors cursor-pointer">
-                    <div className={`p-3 rounded-full ${action.bgColor}`}>
-                      <Icon className={`h-5 w-5 ${action.color}`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{action.label}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {action.description}
-                      </p>
-                    </div>
-                    <ArrowRight className="h-5 w-5 text-muted-foreground" />
+        <div className="grid gap-4 md:grid-cols-2">
+          {QUICK_ACTIONS.map((action) => (
+            <Link key={action.href} href={action.href}>
+              <Card className="transition-colors hover:bg-accent">
+                <CardContent className="flex items-center gap-4 p-6">
+                  <div className={`rounded-lg p-3 ${action.bgColor}`}>
+                    <action.icon className={`h-6 w-6 ${action.color}`} />
                   </div>
-                </Link>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Nhóm của bạn</CardTitle>
-              <Link href="/groups">
-                <Button variant="ghost" size="sm">
-                  Quản lý nhóm
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {groupSummaries.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Bạn chưa có nhóm nào, hãy tạo nhóm mới để bắt đầu chia bill.
-              </p>
-            ) : (
-              groupSummaries.slice(0, 5).map((group) => (
-                <Link key={group.id} href={`/groups/${group.id}`}>
-                  <div className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent transition-colors">
-                    <div>
-                      <p className="font-semibold leading-tight">{group.name}</p>
-                      {group.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">
-                          {group.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">
-                        {group.members} thành viên
-                      </p>
-                      <p className="text-sm font-medium">
-                        {group.totalBill.toLocaleString('vi-VN')}đ
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activities */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Hoạt động gần đây</CardTitle>
-              <Link href="/activities">
-                <Button variant="ghost" size="sm">
-                  Xem tất cả
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentActivities.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Chưa có hoạt động nào
-              </div>
-            ) : (
-              recentActivities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-3 pb-4 border-b last:border-0 last:pb-0"
-                >
-                  <div className="p-2 rounded-full bg-orange-50">
-                    <Receipt className="h-4 w-4 text-orange-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{activity.group}</p>
+                  <div>
+                    <p className="font-semibold">{action.label}</p>
                     <p className="text-sm text-muted-foreground">
-                      {activity.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {activity.timeLabel}
+                      {action.description}
                     </p>
                   </div>
-                  <p className="font-semibold text-sm whitespace-nowrap">
-                    {activity.amount.toLocaleString('vi-VN')}đ
-                  </p>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
 
-        {/* Pending Settlements Alert */}
-        {stats.pendingSettlements > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-100 rounded-full">
-                  <Receipt className="h-5 w-5 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">
-                    Bạn có {stats.pendingSettlements} khoản thanh toán chờ xử lý
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="mr-2 h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-muted-foreground">Đang tải dữ liệu...</span>
+          </div>
+        ) : (
+          <>
+            {/* Statistics */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Tổng số nhóm
+                  </CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalGroups}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Nhóm bạn tham gia
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Nhấn để xem chi tiết
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Tổng chi tiêu
+                  </CardTitle>
+                  <Receipt className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalExpenses}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Khoản chi tiêu
                   </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Tổng số tiền
+                  </CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(stats.totalAmount)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Tổng chi tiêu
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent Activities */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5" />
+                      Hoạt động gần đây
+                    </CardTitle>
+                    <CardDescription>
+                      Các chi tiêu mới nhất trong nhóm của bạn
+                    </CardDescription>
+                  </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-orange-600" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                {recentActivities.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                    <Receipt className="mb-3 h-10 w-10" />
+                    <p>Chưa có hoạt động nào</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-start justify-between border-b pb-3 last:border-0"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Receipt className="h-4 w-4 text-muted-foreground" />
+                            <Link
+                              href={`/groups/${activity.groupId}`}
+                              className="font-medium hover:underline"
+                            >
+                              {activity.groupName}
+                            </Link>
+                          </div>
+                          <p className="mt-1 text-sm">{activity.description}</p>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{activity.paidBy}</span>
+                            <span>•</span>
+                            <span>{formatRelativeTime(activity.timestamp)}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-primary">
+                            {formatCurrency(activity.amount)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* My Groups */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Nhóm của tôi</CardTitle>
+                    <CardDescription>
+                      Các nhóm bạn đang tham gia
+                    </CardDescription>
+                  </div>
+                  <Link href="/groups">
+                    <Button variant="outline" size="sm">
+                      Xem tất cả
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {groups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                    <Users className="mb-3 h-10 w-10" />
+                    <p>Bạn chưa tham gia nhóm nào</p>
+                    <Link href="/groups/new">
+                      <Button size="sm" className="mt-4">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Tạo nhóm đầu tiên
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {groups.slice(0, 5).map((group) => (
+                      <Link
+                        key={group.id}
+                        href={`/groups/${group.id}`}
+                        className="block"
+                      >
+                        <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent">
+                          <div className="flex-1">
+                            <h3 className="font-semibold">{group.name}</h3>
+                            {group.description && (
+                              <p className="text-sm text-muted-foreground">
+                                {group.description}
+                              </p>
+                            )}
+                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                              <span>{group.members.length} thành viên</span>
+                              <span>•</span>
+                              <span>{group.totalExpenses} chi tiêu</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold">
+                              {formatCurrency(group.totalAmount)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Tổng chi
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
     </MainLayout>
