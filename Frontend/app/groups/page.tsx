@@ -11,11 +11,13 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, Loader2, AlertCircle } from "lucide-react";
+import { Users, Loader2, AlertCircle, UserPlus } from "lucide-react";
 import { groupApi } from "@/lib/api";
 import type { Group } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
 export default function GroupsPage() {
+  const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,10 +173,16 @@ export default function GroupsPage() {
             <CardContent className="pt-6 text-center">
               <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
               <p className="mb-4 text-muted-foreground">Bạn chưa có nhóm nào</p>
-              <Button onClick={() => setShowCreator(true)}>
-                <span className="mr-2 text-lg leading-none">+</span>
-                Tạo nhóm đầu tiên
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button onClick={() => setShowCreator(true)}>
+                  <span className="mr-2 text-lg leading-none">+</span>
+                  Tạo nhóm đầu tiên
+                </Button>
+                <Button variant="outline" onClick={() => router.push("/groups/join")}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Tham gia nhóm
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (
