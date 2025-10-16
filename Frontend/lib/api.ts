@@ -7,6 +7,17 @@ import {
   UpdateProfileResponse,
   User,
   ApiError,
+  Group,
+  CreateGroupRequest,
+  CreateGroupResponse,
+  AddMemberRequest,
+  AddMemberResponse,
+  JoinGroupRequest,
+  JoinGroupResponse,
+  Expense,
+  CreateExpenseRequest,
+  CreateExpenseResponse,
+  SettlementResponse,
 } from "./types";
 
 // API Configuration
@@ -271,4 +282,82 @@ export const getAvatarUrl = (userId: string): string => {
 
 export const getPaymentQrUrl = (userId: string): string => {
   return `${API_BASE_URL}/user/${userId}/payment-qr`;
+};
+
+// Group API functions
+export const groupApi = {
+  // Create a new group
+  async createGroup(data: CreateGroupRequest): Promise<CreateGroupResponse> {
+    return apiRequest<CreateGroupResponse>("/groups", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Get all groups for current user
+  async getUserGroups(): Promise<Group[]> {
+    return apiRequest<Group[]>("/groups", {
+      method: "GET",
+    });
+  },
+
+  // Get group details by ID
+  async getGroupById(groupId: string): Promise<Group> {
+    return apiRequest<Group>(`/groups/${groupId}`, {
+      method: "GET",
+    });
+  },
+
+  // Add a member to group
+  async addMember(
+    groupId: string,
+    data: AddMemberRequest
+  ): Promise<AddMemberResponse> {
+    return apiRequest<AddMemberResponse>(`/groups/${groupId}/members`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Join group using invite code (body)
+  async joinGroupByCode(data: JoinGroupRequest): Promise<JoinGroupResponse> {
+    return apiRequest<JoinGroupResponse>("/groups/join", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Join group using invite link (URL param)
+  async joinGroupByLink(inviteCode: string): Promise<JoinGroupResponse> {
+    return apiRequest<JoinGroupResponse>(`/groups/join/${inviteCode}`, {
+      method: "GET",
+    });
+  },
+
+  // Get all expenses in a group
+  async getGroupExpenses(groupId: string): Promise<Expense[]> {
+    return apiRequest<Expense[]>(`/groups/${groupId}/expenses`, {
+      method: "GET",
+    });
+  },
+
+  // Get settlement calculation for a group
+  async getSettlement(groupId: string): Promise<SettlementResponse> {
+    return apiRequest<SettlementResponse>(`/groups/${groupId}/settlement`, {
+      method: "GET",
+    });
+  },
+};
+
+// Expense API functions
+export const expenseApi = {
+  // Create a new expense
+  async createExpense(
+    data: CreateExpenseRequest
+  ): Promise<CreateExpenseResponse> {
+    return apiRequest<CreateExpenseResponse>("/expenses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
 };
