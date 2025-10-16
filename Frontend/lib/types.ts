@@ -54,22 +54,6 @@ export interface UpdateProfileResponse {
   user: User;
 }
 
-// Group APIs
-export interface JoinGroupRequest {
-  inviteCode: string;
-}
-
-export interface JoinGroupResponse {
-  message: string;
-  group: {
-    id: string;
-    name: string;
-    description?: string;
-    creatorId: string;
-    inviteCode: string;
-  };
-}
-
 // API error envelope
 export interface ApiError {
   message: string;
@@ -89,39 +73,87 @@ export interface AuthContextType {
   updateProfile: (data: UpdateProfileRequest) => Promise<void>;
 }
 
-export interface GroupMember {
-  id: string;
-  userId: string;
-  groupId: string;
-  joinedAt: string;
-  user: {
-    id: string;
-    userName: string;
-    email: string;
-    avatarPath?: string;
-  };
-}
+// Group models
 export interface Group {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   inviteCode: string;
   createdById: string;
+  createdBy?: User;
   createdAt: string;
   updatedAt: string;
-  createdBy: {
-    id: string;
-    userName: string;
-    email: string;
-  };
-  members: GroupMember[];
+  members?: GroupMember[];
+  expenses?: Expense[];
 }
 
+export interface GroupMember {
+  id: string;
+  groupId: string;
+  userId: string;
+  user?: User;
+  joinedAt: string;
+}
+
+// Expense models
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  paidById: string;
+  paidBy?: User;
+  groupId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Group API request DTOs
 export interface CreateGroupRequest {
   name: string;
   description?: string;
 }
 
+export interface AddMemberRequest {
+  userId: string;
+}
+
+export interface JoinGroupRequest {
+  inviteCode: string;
+}
+
+// Expense API request DTOs
+export interface CreateExpenseRequest {
+  description: string;
+  amount: number;
+  groupId: string;
+}
+
+// Settlement response DTOs
+export interface MemberBalance {
+  userId: string;
+  userName: string;
+  totalPaid: number;
+  fairShare: number;
+  balance: number;
+}
+
+export interface Transaction {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+}
+
+export interface SettlementResponse {
+  totalExpenses: number;
+  memberCount: number;
+  fairSharePerPerson: number;
+  balances: MemberBalance[];
+  transactions: Transaction[];
+}
+
+// Group API response DTOs
 export interface CreateGroupResponse {
   message: string;
   group: Group;
@@ -133,4 +165,20 @@ export interface GetGroupsResponse {
 
 export interface GetGroupByIdResponse {
   group: Group;
+}
+
+export interface JoinGroupResponse {
+  message: string;
+  group: Group;
+}
+
+export interface AddMemberResponse {
+  message: string;
+  member: GroupMember;
+}
+
+// Expense API response DTOs
+export interface CreateExpenseResponse {
+  message: string;
+  expense: Expense;
 }
