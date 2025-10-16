@@ -79,11 +79,25 @@ export default function AccountPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleRemoveAvatar = () => {
-    setAvatarPreview(null);
-    setAvatarFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  const handleRemoveAvatar = async () => {
+    try {
+      setIsSaving(true);
+      setAvatarPreview(null);
+      const { authApi } = await import("@/lib/api");
+      await authApi.removeAvatar();
+      await refreshProfile();
+
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Failed to remove avatar:", error);
+      alert("Không thể xoá ảnh đại diện. Vui lòng thử lại.");
+      setAvatarPreview(user?.avatarPath ?? null); //Roll back neu cos loi
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -98,7 +112,6 @@ export default function AccountPage() {
         await authApi.uploadAvatar(avatarFile);
       }
 
-      // Then update profile information
       await updateProfile({
         firstName: firstNameInput,
         lastName: lastNameInput,
@@ -106,7 +119,6 @@ export default function AccountPage() {
         phoneNumber: phoneInput,
       });
 
-      // Refresh profile to get updated avatar path
       await refreshProfile();
 
       setIsEditing(false);

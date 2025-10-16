@@ -132,7 +132,12 @@ export const authApi = {
     return response.json();
   },
 
-  // Upload payment QR code
+  async removeAvatar(): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>("/user/remove-avatar", {
+      method: "PATCH",
+    });
+  },
+
   async uploadPaymentQr(
     file: File
   ): Promise<{ message: string; path: string }> {
@@ -260,12 +265,10 @@ export const retryRequest = async <T>(
   throw lastError!;
 };
 
-// Utility to get avatar URL
 export const getAvatarUrl = (userId: string): string => {
   return `${API_BASE_URL}/user/${userId}/avatar`;
 };
 
-// Utility to get payment QR URL
 export const getPaymentQrUrl = (userId: string): string => {
   return `${API_BASE_URL}/user/${userId}/payment-qr`;
 };
