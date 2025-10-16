@@ -134,3 +134,64 @@ export interface GetGroupsResponse {
 export interface GetGroupByIdResponse {
   group: Group;
 }
+
+// Expense APIs
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  paidById: string;
+  groupId: string;
+  createdAt: string;
+  updatedAt: string;
+  paidBy: {
+    id: string;
+    userName: string;
+    email: string;
+  };
+}
+
+export interface GetGroupExpensesResponse {
+  expenses: Expense[];
+}
+
+export interface CreateExpenseRequest {
+  description: string;
+  amount: number;
+  groupId: string;
+}
+
+export interface CreateExpenseResponse {
+  message: string;
+  expense: Expense;
+}
+
+// Settlement APIs
+export interface SettlementMemberBalance {
+  userId: string;
+  userName: string;
+  totalPaid: number;
+  fairShare: number;
+  balance: number;
+}
+
+export interface SettlementTransaction {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+}
+
+export interface SettlementResponse {
+  totalExpenses: number;
+  memberCount: number;
+  fairSharePerPerson: number;
+  balances: SettlementMemberBalance[];
+  transactions: SettlementTransaction[];
+}
+
+export interface AddMemberResponse {
+  message: string;
+  member: GroupMember;
+}

@@ -1,370 +1,244 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Loader2, RefreshCw, Users, Receipt } from "lucide-react";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { useAuth } from "@/contexts/AuthContext";
+import { groupApi, expenseApi } from "@/lib/api";
+import type {
+  Expense,
+  Group,
+  SettlementResponse,
+} from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { GROUP_DETAIL_STORAGE_KEY, GROUPS_STORAGE_KEY } from "@/lib/constants";
-import {
-  seedGroupDetails,
-  type SeedExpense,
-  type SeedGroupDetail,
-} from "@/lib/seedData";
-import { MemberSelector } from "@/components/ui/MemberSelector";
-import { Plus, Receipt } from "lucide-react";
-type Expense = SeedExpense;
-type GroupDetail = SeedGroupDetail;
-type GroupMember = GroupDetail["members"][number];
+import { Label } from "@/components/ui/label";
+import { Plus } from "lucide-react";
 
-type GroupSummary = {
-  id: string;
-  name: string;
-  description?: string;
-  members: number;
-  totalBill: number;
+// Helper functions
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
 };
 
-type Settlement = {
-  from: string;
-  to: string;
-  amount: number;
+const formatDateTime = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleString("vi-VN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 };
 
-type NewExpenseState = {
-  description: string;
-  amount: string;
-  payerId: string;
-  participantIds: string[];
-  createdBy: string;
+const getInitials = (value?: string | null): string => {
+  if (!value) return "?";
+  return value.trim().slice(0, 2).toUpperCase();
 };
 
 export default function GroupDetailPage() {
   const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
-  const groupIdParam = params?.id;
-  const groupId = Array.isArray(groupIdParam)
-    ? groupIdParam[0] ?? ""
-    : groupIdParam ?? "";
+  const { isAuthenticated } = useAuth();
 
-  const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
-  const [groupSummary, setGroupSummary] = useState<GroupSummary | null>(null);
-  const [newExpense, setNewExpense] = useState<NewExpenseState>({
-    description: "",
-    amount: "",
-    payerId: "",
-    participantIds: [],
-    createdBy: "",
-  });
-  const [newMemberName, setNewMemberName] = useState("");
-  const [showAddMember, setShowAddMember] = useState(false);
+  const groupId = Array.isArray(params?.id) ? params.id[0] ?? "" : params?.id ?? "";
+
+  const [group, setGroup] = useState<Group | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [settlement, setSettlement] = useState<SettlementResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const members = useMemo(() => groupDetail?.members ?? [], [groupDetail]);
-  const expenses = useMemo(() => groupDetail?.expenses ?? [], [groupDetail]);
+  // New expense form state
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [newExpenseDescription, setNewExpenseDescription] = useState("");
+  const [newExpenseAmount, setNewExpenseAmount] = useState("");
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
-  const memberIds = useMemo(
-    () => members.map((member) => member.id),
-    [members]
-  );
-  const memberMap = useMemo(() => {
-    const map = new Map<string, GroupMember>();
-    members.forEach((member) => {
-      map.set(member.id, member);
-    });
-    return map;
-  }, [members]);
-
-  const getMemberName = useCallback(
-    (id: string): string => memberMap.get(id)?.name ?? "",
-    [memberMap]
-  );
-
-  const normalizeExpenseState = useCallback(
-    (
-      state: NewExpenseState,
-      options: { keepCreatorFallback?: boolean } = {}
-    ): NewExpenseState => {
-      const keepCreatorFallback = options.keepCreatorFallback ?? false;
-
-      if (memberIds.length === 0) {
-        const trimmedCreator = state.createdBy.trim();
-        const desiredCreator = keepCreatorFallback ? trimmedCreator : "";
-
-        if (
-          state.payerId === "" &&
-          state.participantIds.length === 0 &&
-          state.createdBy === desiredCreator
-        ) {
-          return state;
-        }
-
-        return {
-          ...state,
-          payerId: "",
-          participantIds: [],
-          createdBy: desiredCreator,
-        };
+  const loadData = useCallback(
+    async (mode: "initial" | "refresh" = "initial") => {
+      if (!groupId || !isAuthenticated) {
+        setGroup(null);
+        setExpenses([]);
+        setSettlement(null);
+        setError(null);
+        setIsLoading(false);
+        return;
       }
 
-      const resolvedParticipants = state.participantIds.filter((id) =>
-        memberMap.has(id)
-      );
-      const baseParticipantIds =
-        resolvedParticipants.length > 0 ? resolvedParticipants : memberIds;
-
-      const fallbackPayerId = baseParticipantIds[0] ?? memberIds[0] ?? "";
-      const payerId = baseParticipantIds.includes(state.payerId)
-        ? state.payerId
-        : fallbackPayerId;
-
-      const normalizedParticipantIds = (() => {
-        if (!payerId) {
-          const seen = new Set<string>();
-          return baseParticipantIds.filter((id) => {
-            if (seen.has(id)) {
-              return false;
-            }
-            seen.add(id);
-            return true;
-          });
-        }
-
-        const reordered = [
-          payerId,
-          ...baseParticipantIds.filter((id) => id !== payerId),
-        ];
-        const seen = new Set<string>();
-        return reordered.filter((id) => {
-          if (seen.has(id)) {
-            return false;
-          }
-          seen.add(id);
-          return true;
-        });
-      })();
-
-      const payerName = getMemberName(payerId);
-
-      if (
-        payerId === state.payerId &&
-        arraysEqual(normalizedParticipantIds, state.participantIds) &&
-        payerName === state.createdBy
-      ) {
-        return state;
-      }
-
-      return {
-        ...state,
-        payerId,
-        participantIds: normalizedParticipantIds,
-        createdBy: payerName,
-      };
-    },
-    [getMemberName, memberIds, memberMap]
-  );
-
-  useEffect(() => {
-    setNewExpense((previous) => normalizeExpenseState(previous));
-  }, [normalizeExpenseState]);
-
-  useEffect(() => {
-    if (!groupId) {
-      setGroupDetail(null);
-      setGroupSummary(null);
-      setIsLoading(false);
-      return;
-    }
-
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    setIsLoading(true);
-
-    const summaries = readGroupSummaries();
-    const summary = summaries.find((item) => item.id === groupId);
-    const storedDetails = readGroupDetails();
-
-    let detail = storedDetails[groupId] ?? seedGroupDetails[groupId] ?? null;
-
-    if (!detail && summary) {
-      detail = {
-        id: summary.id,
-        name: summary.name,
-        description: summary.description,
-        members: [],
-        expenses: [],
-      };
-    }
-
-    if (detail) {
-      const normalized: GroupDetail = {
-        id: detail.id || summary?.id || groupId,
-        name: summary?.name ?? detail.name,
-        description: summary?.description ?? detail.description,
-        members: detail.members ?? [],
-        expenses: detail.expenses ?? [],
-      };
-
-      commitDetail(normalized);
-    } else {
-      setGroupDetail(null);
-      if (summary) {
-        setGroupSummary(summary);
+      if (mode === "refresh") {
+        setIsRefreshing(true);
       } else {
-        setGroupSummary(null);
+        setIsLoading(true);
       }
-      setSettlements([]);
-    }
+      setError(null);
 
-    setIsLoading(false);
-  }, [groupId]);
+      try {
+        // Load group details
+        const groupResponse = await groupApi.getGroupById(groupId);
+        setGroup(groupResponse.group);
 
-  const commitDetail = (detail: GroupDetail): void => {
-    const recalculated = recalculateGroupDetail(detail);
-    setGroupDetail(recalculated.detail);
-    setSettlements(recalculated.settlements);
-    persistGroupDetail(recalculated.detail);
-    syncGroupSummary(recalculated.detail, setGroupSummary);
+        const warnings: string[] = [];
+
+        // Load expenses
+        try {
+          const expensesResponse = await groupApi.getGroupExpenses(groupId);
+          setExpenses(expensesResponse.expenses);
+        } catch (expensesError) {
+          console.error("Failed to load group expenses", expensesError);
+          setExpenses([]);
+          warnings.push("Không thể tải danh sách chi tiêu.");
+        }
+
+        // Load settlement
+        try {
+          const settlementResponse = await groupApi.getSettlement(groupId);
+          setSettlement(settlementResponse);
+        } catch (settlementError) {
+          console.error("Failed to load settlement", settlementError);
+          setSettlement(null);
+          warnings.push("Không thể tải dữ liệu cân bằng khoản nợ.");
+        }
+
+        if (warnings.length > 0) {
+          setError(warnings.join(" "));
+        }
+      } catch (detailError) {
+        console.error("Failed to load group", detailError);
+        const message =
+          detailError instanceof Error
+            ? detailError.message
+            : "Không thể tải thông tin nhóm.";
+        setGroup(null);
+        setExpenses([]);
+        setSettlement(null);
+        setError(message);
+      } finally {
+        if (mode === "refresh") {
+          setIsRefreshing(false);
+        } else {
+          setIsLoading(false);
+        }
+      }
+    },
+    [groupId, isAuthenticated]
+  );
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleRefresh = () => {
+    loadData("refresh");
   };
 
-  const createDetailSkeleton = (): GroupDetail => ({
-    id: groupId,
-    name: groupSummary?.name ?? `Nhóm ${groupId}`,
-    description: groupSummary?.description,
-    members: [],
-    expenses: [],
-  });
-
-  const handleAddMember = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!groupId || !newMemberName.trim()) {
+  const handleCreateExpense = async () => {
+    if (!groupId || !newExpenseDescription.trim() || !newExpenseAmount) {
       return;
     }
 
-    const baseDetail = groupDetail ?? createDetailSkeleton();
-    const nextDetail: GroupDetail = {
-      ...baseDetail,
-      members: [
-        ...baseDetail.members,
-        {
-          id: crypto.randomUUID(),
-          name: newMemberName.trim(),
-          spent: 0,
-          owes: 0,
-        },
-      ],
-    };
+    const amount = parseFloat(newExpenseAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Vui lòng nhập số tiền hợp lệ");
+      return;
+    }
 
-    commitDetail(nextDetail);
-    setNewMemberName("");
+    setIsCreatingExpense(true);
+    try {
+      await expenseApi.createExpense({
+        description: newExpenseDescription.trim(),
+        amount: amount,
+        groupId: groupId,
+      });
+
+      // Reset form
+      setNewExpenseDescription("");
+      setNewExpenseAmount("");
+      setShowExpenseForm(false);
+
+      // Reload data
+      await loadData("refresh");
+    } catch (error) {
+      console.error("Failed to create expense", error);
+      const message =
+        error instanceof Error ? error.message : "Không thể tạo chi tiêu.";
+      alert(message);
+    } finally {
+      setIsCreatingExpense(false);
+    }
   };
 
-  const handleRemoveMember = (memberId: string) => {
-    if (!groupDetail || !groupId) {
-      return;
-    }
-
-    const nextDetail: GroupDetail = {
-      ...groupDetail,
-      members: groupDetail.members.filter((member) => member.id !== memberId),
-    };
-
-    commitDetail(nextDetail);
-  };
-
-  const handleAddExpense = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!groupId) {
-      return;
-    }
-
-    const payer = memberMap.get(newExpense.payerId);
-    if (!payer) {
-      return;
-    }
-
-    const validParticipantIds = newExpense.participantIds.filter((id) =>
-      memberMap.has(id)
+  if (!isAuthenticated) {
+    return (
+      <MainLayout
+        title="Chi tiết nhóm"
+        showBack
+        onBackClick={() => router.back()}
+      >
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="mb-4 text-muted-foreground">
+              Vui lòng đăng nhập để xem thông tin nhóm.
+            </p>
+          </CardContent>
+        </Card>
+      </MainLayout>
     );
-    const participantIds =
-      validParticipantIds.length > 0 ? validParticipantIds : memberIds;
+  }
 
-    if (participantIds.length === 0) {
-      return;
-    }
-
-    const safeAmount = toNonNegativeInteger(newExpense.amount);
-
-    const baseDetail = groupDetail ?? createDetailSkeleton();
-    const expense: Expense = {
-      id: crypto.randomUUID(),
-      description: newExpense.description.trim(),
-      amount: safeAmount,
-      paidBy: payer.name,
-      paidById: payer.id,
-      date: new Date().toISOString(),
-      participantIds,
-      createdBy: payer.name,
-    };
-
-    const nextDetail: GroupDetail = {
-      ...baseDetail,
-      expenses: [...baseDetail.expenses, expense],
-    };
-
-    commitDetail(nextDetail);
-    setNewExpense((previous) =>
-      normalizeExpenseState({
-        ...previous,
-        description: "",
-        amount: "",
-        payerId: payer.id,
-        participantIds,
-        createdBy: payer.name,
-      })
-    );
-  };
-
-  const title = groupDetail
-    ? groupDetail.name
-    : groupSummary
-    ? groupSummary.name
-    : "Nhóm không tồn tại";
+  const isBusy = isLoading || isRefreshing;
+  const pageTitle = group?.name ?? "Chi tiết nhóm";
 
   return (
     <MainLayout
-      title={title}
+      title={pageTitle}
       showBack
       onBackClick={() => router.back()}
       rightAction={
-        groupDetail ? (
+        groupId ? (
           <Button
             size="sm"
-            onClick={() => {
-              const element = document.getElementById("add-expense-form");
-              if (element) {
-                element.scrollIntoView({ behavior: "smooth" });
-              }
-            }}
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={isBusy}
           >
-            <Plus className="h-4 w-4 mr-1" />
-            Chi phí
+            {isRefreshing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Đang tải
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Tải lại
+              </>
+            )}
           </Button>
         ) : null
       }
     >
       {isLoading ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Đang tải thông tin nhóm...
-          </CardContent>
-        </Card>
-      ) : !groupDetail ? (
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Đang tải dữ liệu nhóm...
+        </div>
+      ) : !group ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Không tìm thấy nhóm. Vui lòng kiểm tra lại liên kết.
@@ -372,109 +246,157 @@ export default function GroupDetailPage() {
         </Card>
       ) : (
         <div className="space-y-6">
+          {error && <ErrorAlert error={error} className="mb-2" />}
+
+          {/* Group Info */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
+              <CardTitle>Thông tin nhóm</CardTitle>
+              {group.description && (
+                <CardDescription>{group.description}</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
               <div>
-                <CardTitle>Thành viên ({members.length})</CardTitle>
+                <p className="text-xs text-muted-foreground">Mã mời</p>
+                <p className="font-medium font-mono tracking-wider">
+                  {group.inviteCode}
+                </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAddMember((current) => !current)}
-                aria-label={
-                  showAddMember
-                    ? "Đóng biểu mẫu thêm thành viên"
-                    : "Thêm thành viên"
-                }
-              >
-                {showAddMember ? "Đóng" : "Thêm"}
-              </Button>
+              <div>
+                <p className="text-xs text-muted-foreground">Người tạo</p>
+                <p className="font-medium">{group.createdBy.userName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {group.createdBy.email}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Ngày tạo</p>
+                <p className="font-medium">{formatDateTime(group.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cập nhật</p>
+                <p className="font-medium">{formatDateTime(group.updatedAt)}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Members */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Thành viên ({group.members.length})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {showAddMember && (
-                <form
-                  className="flex items-center justify-between gap-3"
-                  onSubmit={handleAddMember}
-                >
-                  <Input
-                    placeholder="Tên thành viên"
-                    value={newMemberName}
-                    onChange={(event) => setNewMemberName(event.target.value)}
-                    required
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    aria-label="Xác nhận thêm thành viên"
-                  >
-                    Thêm
-                  </Button>
-                </form>
-              )}
-
-              {members.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Chưa có thành viên nào trong nhóm.
-                </p>
+              {group.members.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Users className="mb-3 h-10 w-10" />
+                  Chưa có thành viên nào.
+                </div>
               ) : (
-                members.map((member) => (
+                group.members.map((member) => (
                   <div
                     key={member.id}
                     className="flex items-center justify-between"
                   >
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                        <AvatarFallback>
+                          {getInitials(member.user.userName)}
+                        </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">{member.name}</p>
+                        <p className="font-medium">{member.user.userName}</p>
                         <p className="text-xs text-muted-foreground">
-                          Đã chi: {member.spent.toLocaleString("vi-VN")}đ
+                          {member.user.email}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        {member.owes > 0 ? (
-                          <p className="text-sm text-destructive">
-                            Nợ {member.owes.toLocaleString("vi-VN")}đ
-                          </p>
-                        ) : member.owes < 0 ? (
-                          <p className="text-sm text-green-600">
-                            Được trả{" "}
-                            {Math.abs(member.owes).toLocaleString("vi-VN")}đ
-                          </p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            Đã cân
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive"
-                        aria-label={`Xóa ${member.name}`}
-                        onClick={() => handleRemoveMember(member.id)}
-                      >
-                        <span className="text-xl leading-none">-</span>
-                      </Button>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Tham gia: {formatDateTime(member.joinedAt)}
+                    </p>
                   </div>
                 ))
               )}
             </CardContent>
           </Card>
 
+          {/* Expenses */}
           <Card>
-            <CardHeader>
-              <CardTitle>Chi phí gần đây</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Chi tiêu ({expenses.length})</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => setShowExpenseForm(!showExpenseForm)}
+                disabled={isBusy}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Thêm chi tiêu
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              {/* Add Expense Form */}
+              {showExpenseForm && (
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                  <div>
+                    <Label htmlFor="description">Mô tả chi tiêu</Label>
+                    <Input
+                      id="description"
+                      placeholder="Ví dụ: Ăn trưa, Xem phim..."
+                      value={newExpenseDescription}
+                      onChange={(e) => setNewExpenseDescription(e.target.value)}
+                      disabled={isCreatingExpense}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="amount">Số tiền (VNĐ)</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      placeholder="0"
+                      value={newExpenseAmount}
+                      onChange={(e) => setNewExpenseAmount(e.target.value)}
+                      disabled={isCreatingExpense}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowExpenseForm(false);
+                        setNewExpenseDescription("");
+                        setNewExpenseAmount("");
+                      }}
+                      disabled={isCreatingExpense}
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCreateExpense}
+                      disabled={
+                        isCreatingExpense ||
+                        !newExpenseDescription.trim() ||
+                        !newExpenseAmount
+                      }
+                    >
+                      {isCreatingExpense ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Đang tạo...
+                        </>
+                      ) : (
+                        "Tạo chi tiêu"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {expenses.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Receipt className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                  <p className="text-muted-foreground">Chưa có chi phí nào</p>
+                <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Receipt className="mb-3 h-10 w-10" />
+                  Chưa có chi tiêu nào trong nhóm này.
                 </div>
               ) : (
                 expenses.map((expense) => (
@@ -482,17 +404,18 @@ export default function GroupDetailPage() {
                     key={expense.id}
                     className="flex items-start justify-between border-b pb-3 last:border-0"
                   >
-                    <div className="flex-1">
+                    <div>
                       <p className="font-medium">{expense.description}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {expense.paidBy} thanh toán
+                      <p className="text-xs text-muted-foreground">
+                        {formatDateTime(expense.createdAt)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(expense.date).toLocaleDateString("vi-VN")}
+                        Thanh toán: {expense.paidBy.userName} (
+                        {expense.paidBy.email})
                       </p>
                     </div>
-                    <p className="font-semibold">
-                      {expense.amount.toLocaleString("vi-VN")}đ
+                    <p className="font-semibold text-primary">
+                      {formatCurrency(expense.amount)}
                     </p>
                   </div>
                 ))
@@ -500,455 +423,88 @@ export default function GroupDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Settlement */}
           <Card>
             <CardHeader>
               <CardTitle>Cân bằng khoản nợ</CardTitle>
+              {settlement && (
+                <CardDescription>
+                  Tổng chi tiêu: {formatCurrency(settlement.totalExpenses)} •{" "}
+                  {settlement.memberCount} thành viên • Mỗi người:{" "}
+                  {formatCurrency(settlement.fairSharePerPerson)}
+                </CardDescription>
+              )}
             </CardHeader>
-            <CardContent className="space-y-3">
-              {settlements.length === 0 ? (
+            <CardContent className="space-y-4">
+              {!settlement ? (
+                <p className="text-sm text-muted-foreground">
+                  Không thể tính toán cân bằng khoản nợ vào lúc này.
+                </p>
+              ) : settlement.transactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Mọi người đã cân bằng, không có khoản nợ nào.
                 </p>
               ) : (
-                settlements.map((settlement, index) => (
-                  <div
-                    key={`${settlement.from}-${settlement.to}-${index}`}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {settlement.from} cần trả {settlement.to}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Sau khi chia theo các khoản chi liên quan
+                <>
+                  {settlement.transactions.map((transaction, index) => (
+                    <div
+                      key={`${transaction.fromUserId}-${transaction.toUserId}-${index}`}
+                      className="flex items-center justify-between rounded-lg border p-3"
+                    >
+                      <div>
+                        <p className="font-medium">
+                          {transaction.fromUserName} trả {transaction.toUserName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Số tiền sau khi chia đều cho các thành viên
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-destructive">
+                        {formatCurrency(transaction.amount)}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold text-destructive">
-                      {settlement.amount.toLocaleString("vi-VN")}đ
-                    </p>
-                  </div>
-                ))
+                  ))}
+
+                  {/* Balance Details */}
+                  {settlement.balances.length > 0 && (
+                    <div className="mt-4 rounded-lg bg-muted/40 p-4">
+                      <p className="mb-3 text-sm font-semibold">
+                        Chi tiết từng thành viên
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {settlement.balances.map((balance) => (
+                          <div key={balance.userId} className="text-sm">
+                            <p className="font-medium">{balance.userName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Đã chi: {formatCurrency(balance.totalPaid)} • Phần
+                              chia: {formatCurrency(balance.fairShare)}
+                            </p>
+                            <p
+                              className={
+                                balance.balance > 0
+                                  ? "text-xs font-medium text-green-600"
+                                  : balance.balance < 0
+                                  ? "text-xs font-medium text-destructive"
+                                  : "text-xs text-muted-foreground"
+                              }
+                            >
+                              {balance.balance > 0
+                                ? `Được nhận: ${formatCurrency(balance.balance)}`
+                                : balance.balance < 0
+                                ? `Cần trả: ${formatCurrency(-balance.balance)}`
+                                : "Đã cân bằng"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </CardContent>
-          </Card>
-
-          <Card id="add-expense-form">
-            <CardHeader>
-              <CardTitle>Thêm chi tiêu</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleAddExpense} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium">Người chi</label>
-                  <MemberSelector
-                    members={members}
-                    value={newExpense.payerId}
-                    onChange={(value) => {
-                      if (typeof value !== "string") {
-                        return;
-                      }
-
-                      setNewExpense((previous) =>
-                        normalizeExpenseState({
-                          ...previous,
-                          payerId: value,
-                          participantIds: previous.participantIds.includes(
-                            value
-                          )
-                            ? previous.participantIds
-                            : [...previous.participantIds, value],
-                        })
-                      );
-                    }}
-                    placeholder={
-                      members.length === 0
-                        ? "Thêm thành viên để ghi nhận chi tiêu"
-                        : "Chọn người chi"
-                    }
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Số tiền</label>
-
-                  <Input
-                    type="number"
-                    value={newExpense.amount}
-                    onChange={(event) =>
-                      setNewExpense((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                    placeholder="Ex. 500000"
-                    className="text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Mô tả</label>
-
-                  <Input
-                    type="text"
-                    value={newExpense.description}
-                    onChange={(event) =>
-                      setNewExpense((current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }))
-                    }
-                    placeholder="Mục đích của chi tiêu này"
-                    required
-                    className="text-sm"
-                  />
-                  <div className="pt-4">
-                    <MemberSelector
-                      members={members.filter(
-                        (member) => member.id !== newExpense.payerId
-                      )}
-                      value={newExpense.participantIds.filter(
-                        (id) => id !== newExpense.payerId
-                      )}
-                      onChange={(value) => {
-                        if (!Array.isArray(value)) {
-                          return;
-                        }
-
-                        setNewExpense((previous) =>
-                          normalizeExpenseState({
-                            ...previous,
-                            participantIds: [...value, previous.payerId].filter(
-                              Boolean
-                            ),
-                          })
-                        );
-                      }}
-                      label="Thành viên của chi tiêu này"
-                      placeholder={
-                        members.length === 0
-                          ? "Chưa có thành viên"
-                          : "Chọn thành viên"
-                      }
-                      multiple
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Người tạo sẽ tự động là người chi:{" "}
-                  {getMemberName(newExpense.payerId) || "Chưa xác định"}
-                </p>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={members.length === 0}
-                >
-                  Lưu chi tiêu
-                </Button>
-              </form>
             </CardContent>
           </Card>
         </div>
       )}
     </MainLayout>
   );
-}
-
-function readGroupDetails(): Record<string, GroupDetail> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  const stored = window.localStorage.getItem(GROUP_DETAIL_STORAGE_KEY);
-  if (!stored) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Record<string, GroupDetail>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    console.error("Failed to parse stored group details", error);
-    return {};
-  }
-}
-
-function persistGroupDetail(detail: GroupDetail): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const current = readGroupDetails();
-    const normalized: GroupDetail = {
-      ...detail,
-      members: detail.members ?? [],
-      expenses: detail.expenses ?? [],
-    };
-    current[normalized.id] = normalized;
-    window.localStorage.setItem(
-      GROUP_DETAIL_STORAGE_KEY,
-      JSON.stringify(current)
-    );
-    notifyDataChanged();
-  } catch (error) {
-    console.error("Failed to persist group detail", error);
-  }
-}
-
-function readGroupSummaries(): GroupSummary[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  const stored = window.localStorage.getItem(GROUPS_STORAGE_KEY);
-  if (!stored) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as GroupSummary[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to parse stored groups", error);
-    return [];
-  }
-}
-
-function writeGroupSummaries(summaries: GroupSummary[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
-  notifyDataChanged();
-}
-
-function toNonNegativeInteger(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? 0 : Math.max(parsed, 0);
-}
-
-function calculateTotal(expenses: Expense[]): number {
-  return expenses.reduce((sum, expense) => sum + expense.amount, 0);
-}
-
-function arraysEqual(first: string[], second: string[]): boolean {
-  if (first.length !== second.length) {
-    return false;
-  }
-
-  const sortedFirst = [...first].sort();
-  const sortedSecond = [...second].sort();
-
-  return sortedFirst.every((value, index) => value === sortedSecond[index]);
-}
-
-function recalculateGroupDetail(detail: GroupDetail): {
-  detail: GroupDetail;
-  settlements: Settlement[];
-} {
-  const members = detail.members ?? [];
-  const expenses = detail.expenses ?? [];
-
-  const memberById = new Map<string, SeedGroupDetail["members"][number]>();
-  const memberIdByName = new Map<string, string>();
-  members.forEach((member) => {
-    memberById.set(member.id, member);
-    memberIdByName.set(member.name, member.id);
-  });
-
-  if (members.length === 0) {
-    return {
-      detail: {
-        ...detail,
-        members: members.map((member) => ({
-          ...member,
-          spent: 0,
-          owes: 0,
-        })),
-      },
-      settlements: [],
-    };
-  }
-  const memberIds = new Set(members.map((member) => member.id));
-  const defaultParticipantIds = members.map((member) => member.id);
-
-  const normalizedExpenses = expenses.map((expense) => {
-    const rawParticipants: string[] = Array.isArray(expense.participantIds)
-      ? expense.participantIds
-      : defaultParticipantIds;
-    const filteredParticipants = rawParticipants.filter((id) =>
-      memberIds.has(id)
-    );
-    const participants =
-      filteredParticipants.length > 0
-        ? filteredParticipants
-        : defaultParticipantIds;
-
-    const hasValidPaidById =
-      typeof expense.paidById === "string" && memberIds.has(expense.paidById);
-    const resolvedPayerId = hasValidPaidById
-      ? expense.paidById
-      : memberIdByName.get(expense.paidBy) ?? participants[0] ?? "";
-
-    const resolvedPayerName = resolvedPayerId
-      ? memberById.get(resolvedPayerId)?.name ?? expense.paidBy
-      : expense.paidBy;
-
-    const createdBy = resolvedPayerName ?? "";
-
-    return {
-      ...expense,
-      paidBy: resolvedPayerName ?? "",
-      paidById: resolvedPayerId || undefined,
-      participantIds: participants,
-      createdBy,
-    };
-  });
-
-  const shareByMember = new Map<string, number>();
-  const spentByMember = new Map<string, number>();
-
-  normalizedExpenses.forEach((expense) => {
-    const participants = expense.participantIds ?? defaultParticipantIds;
-    if (participants.length === 0) {
-      return;
-    }
-
-    const share = expense.amount / participants.length;
-    participants.forEach((memberId) => {
-      if (!memberIds.has(memberId)) {
-        return;
-      }
-      shareByMember.set(memberId, (shareByMember.get(memberId) ?? 0) + share);
-    });
-
-    const hasValidPaidById =
-      typeof expense.paidById === "string" && memberIds.has(expense.paidById);
-    const payerId = hasValidPaidById
-      ? expense.paidById
-      : memberIdByName.get(expense.paidBy);
-
-    if (payerId) {
-      spentByMember.set(
-        payerId,
-        (spentByMember.get(payerId) ?? 0) + expense.amount
-      );
-    }
-  });
-
-  const updatedMembers = members.map((member) => {
-    const spent = spentByMember.get(member.id) ?? 0;
-    const share = shareByMember.get(member.id) ?? 0;
-    const owes = Math.round(share - spent);
-    return {
-      ...member,
-      spent,
-      owes,
-    };
-  });
-
-  const totalOwes = updatedMembers.reduce(
-    (sum, member) => sum + member.owes,
-    0
-  );
-  if (totalOwes !== 0) {
-    const adjustIndex = updatedMembers.findIndex((member) => member.owes !== 0);
-    const targetIndex = adjustIndex === -1 ? 0 : adjustIndex;
-    updatedMembers[targetIndex] = {
-      ...updatedMembers[targetIndex],
-      owes: updatedMembers[targetIndex].owes - totalOwes,
-    };
-  }
-
-  const settlements = buildSettlements(updatedMembers);
-
-  return {
-    detail: {
-      ...detail,
-      members: updatedMembers,
-      expenses: normalizedExpenses,
-    },
-    settlements,
-  };
-}
-
-function buildSettlements(members: SeedGroupDetail["members"]): Settlement[] {
-  const debtors = members
-    .filter((member) => member.owes > 0)
-    .map((member) => ({ name: member.name, amount: member.owes }));
-  const creditors = members
-    .filter((member) => member.owes < 0)
-    .map((member) => ({ name: member.name, amount: Math.abs(member.owes) }));
-
-  const settlements: Settlement[] = [];
-  let debtorIndex = 0;
-  let creditorIndex = 0;
-
-  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
-    const debtor = debtors[debtorIndex];
-    const creditor = creditors[creditorIndex];
-    const amount = Math.min(debtor.amount, creditor.amount);
-
-    if (amount > 0) {
-      settlements.push({
-        from: debtor.name,
-        to: creditor.name,
-        amount,
-      });
-    }
-
-    debtor.amount -= amount;
-    creditor.amount -= amount;
-
-    if (debtor.amount <= 0) {
-      debtorIndex += 1;
-    }
-
-    if (creditor.amount <= 0) {
-      creditorIndex += 1;
-    }
-  }
-
-  return settlements;
-}
-
-function syncGroupSummary(
-  detail: GroupDetail,
-  setGroupSummaryState: (summary: GroupSummary) => void
-): void {
-  const summary: GroupSummary = {
-    id: detail.id,
-    name: detail.name,
-    description: detail.description,
-    members: detail.members.length,
-    totalBill: calculateTotal(detail.expenses),
-  };
-
-  setGroupSummaryState(summary);
-
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const stored = readGroupSummaries();
-    const index = stored.findIndex((item) => item.id === summary.id);
-    if (index === -1) {
-      stored.unshift(summary);
-    } else {
-      stored[index] = { ...stored[index], ...summary };
-    }
-    writeGroupSummaries(stored);
-  } catch (error) {
-    console.error("Failed to sync group summary", error);
-  }
-}
-
-function notifyDataChanged(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(new Event("sb:data-changed"));
 }
