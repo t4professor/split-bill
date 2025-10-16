@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   const uploadDirs = [
@@ -23,11 +24,23 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Enable CORS
+  app.enableCors({
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    credentials: true,
+  });
+
+  // Serve static files from uploads directory
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
+
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api', app, swaggerDocument)
-  await app.listen(process.env.PORT ?? 3000);
+  SwaggerModule.setup('api', app, swaggerDocument);
+  await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();

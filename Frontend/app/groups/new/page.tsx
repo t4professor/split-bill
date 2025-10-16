@@ -5,10 +5,7 @@ import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  GROUP_DETAIL_STORAGE_KEY,
-  GROUPS_STORAGE_KEY,
-} from "@/lib/constants";
+import { GROUP_DETAIL_STORAGE_KEY, GROUPS_STORAGE_KEY } from "@/lib/constants";
 import { type SeedGroupDetail } from "@/lib/seedData";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -19,7 +16,10 @@ export default function NewGroupPage() {
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const creatorName = useMemo(() => user?.name?.trim() ?? "", [user]);
+  const creatorName = useMemo(() => {
+    if (!user) return "";
+    return `${user.firstName} ${user.lastName}`.trim();
+  }, [user]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,10 +43,11 @@ export default function NewGroupPage() {
       totalBill: 0,
     };
 
-    const stored = typeof window !== "undefined"
-      ? window.localStorage.getItem(GROUPS_STORAGE_KEY)
-      : null;
-    let groups: typeof newGroup[] = [];
+    const stored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(GROUPS_STORAGE_KEY)
+        : null;
+    let groups: (typeof newGroup)[] = [];
 
     if (stored) {
       try {
