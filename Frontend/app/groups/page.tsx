@@ -36,7 +36,7 @@ export default function GroupsPage() {
       setIsLoading(true);
       setError(null);
       const data = await groupApi.getUserGroups();
-      setGroups(data);
+      setGroups(data.groups);
     } catch (err) {
       console.error("Failed to load groups:", err);
       setError(err instanceof Error ? err.message : "Không thể tải danh sách nhóm");
