@@ -38,9 +38,18 @@ export class GroupController {
   }
 
   @Post('join')
-  @ApiOperation({ summary: 'Join a group using invite code' })
+  @ApiOperation({ summary: 'Join a group using invite code (body)' })
   joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
     return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
+  }
+
+  @Get('join/:inviteCode')
+  @ApiOperation({ summary: 'Join a group using invite link (URL)' })
+  joinGroupByLink(
+    @Param('inviteCode') inviteCode: string,
+    @Request() req: any)
+    {
+    return this.groupService.joinGroupByInviteCode(inviteCode, req.user.sub);
   }
 
   @Get(':id')
