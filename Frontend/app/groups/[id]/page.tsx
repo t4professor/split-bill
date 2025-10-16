@@ -66,7 +66,10 @@ export default function GroupDetailPage() {
   const members = useMemo(() => groupDetail?.members ?? [], [groupDetail]);
   const expenses = useMemo(() => groupDetail?.expenses ?? [], [groupDetail]);
 
-  const memberIds = useMemo(() => members.map((member) => member.id), [members]);
+  const memberIds = useMemo(
+    () => members.map((member) => member.id),
+    [members]
+  );
   const memberMap = useMemo(() => {
     const map = new Map<string, GroupMember>();
     members.forEach((member) => {
@@ -549,7 +552,9 @@ export default function GroupDetailPage() {
                         normalizeExpenseState({
                           ...previous,
                           payerId: value,
-                          participantIds: previous.participantIds.includes(value)
+                          participantIds: previous.participantIds.includes(
+                            value
+                          )
                             ? previous.participantIds
                             : [...previous.participantIds, value],
                         })
@@ -598,7 +603,9 @@ export default function GroupDetailPage() {
                   />
                   <div className="pt-4">
                     <MemberSelector
-                      members={members.filter((member) => member.id !== newExpense.payerId)}
+                      members={members.filter(
+                        (member) => member.id !== newExpense.payerId
+                      )}
                       value={newExpense.participantIds.filter(
                         (id) => id !== newExpense.payerId
                       )}
@@ -610,7 +617,9 @@ export default function GroupDetailPage() {
                         setNewExpense((previous) =>
                           normalizeExpenseState({
                             ...previous,
-                            participantIds: [...value, previous.payerId].filter(Boolean),
+                            participantIds: [...value, previous.payerId].filter(
+                              Boolean
+                            ),
                           })
                         );
                       }}
@@ -772,13 +781,15 @@ function recalculateGroupDetail(detail: GroupDetail): {
       memberIds.has(id)
     );
     const participants =
-      filteredParticipants.length > 0 ? filteredParticipants : defaultParticipantIds;
+      filteredParticipants.length > 0
+        ? filteredParticipants
+        : defaultParticipantIds;
 
     const hasValidPaidById =
       typeof expense.paidById === "string" && memberIds.has(expense.paidById);
     const resolvedPayerId = hasValidPaidById
       ? expense.paidById
-  : memberIdByName.get(expense.paidBy) ?? (participants[0] ?? "");
+      : memberIdByName.get(expense.paidBy) ?? participants[0] ?? "";
 
     const resolvedPayerName = resolvedPayerId
       ? memberById.get(resolvedPayerId)?.name ?? expense.paidBy
@@ -809,10 +820,7 @@ function recalculateGroupDetail(detail: GroupDetail): {
       if (!memberIds.has(memberId)) {
         return;
       }
-      shareByMember.set(
-        memberId,
-        (shareByMember.get(memberId) ?? 0) + share
-      );
+      shareByMember.set(memberId, (shareByMember.get(memberId) ?? 0) + share);
     });
 
     const hasValidPaidById =
@@ -840,7 +848,10 @@ function recalculateGroupDetail(detail: GroupDetail): {
     };
   });
 
-  const totalOwes = updatedMembers.reduce((sum, member) => sum + member.owes, 0);
+  const totalOwes = updatedMembers.reduce(
+    (sum, member) => sum + member.owes,
+    0
+  );
   if (totalOwes !== 0) {
     const adjustIndex = updatedMembers.findIndex((member) => member.owes !== 0);
     const targetIndex = adjustIndex === -1 ? 0 : adjustIndex;

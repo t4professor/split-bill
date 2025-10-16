@@ -54,6 +54,22 @@ export interface UpdateProfileResponse {
   user: User;
 }
 
+// Group APIs
+export interface JoinGroupRequest {
+  inviteCode: string;
+}
+
+export interface JoinGroupResponse {
+  message: string;
+  group: {
+    id: string;
+    name: string;
+    description?: string;
+    creatorId: string;
+    inviteCode: string;
+  };
+}
+
 // API error envelope
 export interface ApiError {
   message: string;
@@ -71,4 +87,50 @@ export interface AuthContextType {
   logout: () => void;
   refreshProfile: () => Promise<void>;
   updateProfile: (data: UpdateProfileRequest) => Promise<void>;
+}
+
+export interface GroupMember {
+  id: string;
+  userId: string;
+  groupId: string;
+  joinedAt: string;
+  user: {
+    id: string;
+    userName: string;
+    email: string;
+    avatarPath?: string;
+  };
+}
+export interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  inviteCode: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    userName: string;
+    email: string;
+  };
+  members: GroupMember[];
+}
+
+export interface CreateGroupRequest {
+  name: string;
+  description?: string;
+}
+
+export interface CreateGroupResponse {
+  message: string;
+  group: Group;
+}
+
+export interface GetGroupsResponse {
+  groups: Group[];
+}
+
+export interface GetGroupByIdResponse {
+  group: Group;
 }
