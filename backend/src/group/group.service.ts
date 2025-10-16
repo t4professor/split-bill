@@ -353,29 +353,43 @@ export class GroupService {
     }
 
     // Add user to group
-    const member = await this.prisma.groupMember.create({
+    await this.prisma.groupMember.create({
       data: {
         groupId: group.id,
         userId: userId,
       },
+    });
+
+    // Fetch updated group with all members
+    const updatedGroup = await this.prisma.group.findUnique({
+      where: { id: group.id },
       include: {
-        user: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                avatarPath: true,
+              },
+            },
+          },
+        },
+        createdBy: {
           select: {
             id: true,
             userName: true,
             email: true,
-          },
-        },
-        group: {
-          select: {
-            id: true,
-            name: true,
-            inviteCode: true,
+            firstName: true,
+            lastName: true,
           },
         },
       },
     });
 
-    return { message: 'Successfully joined group', member };
+    return { message: 'Successfully joined group', group: updatedGroup };
   }
 }
