@@ -229,17 +229,6 @@ export const groupApi = {
     });
   },
 
-  async getGroupExpenses(groupId: string): Promise<GetGroupExpensesResponse> {
-    return apiRequest<GetGroupExpensesResponse>(`/groups/${groupId}/expenses`, {
-  // Join group using invite link (URL param)
-  async joinGroupByLink(inviteCode: string): Promise<JoinGroupResponse> {
-    return apiRequest<JoinGroupResponse>(`/groups/join/${inviteCode}`, {
-      method: "GET",
-    });
-  },
-
-  async getSettlement(groupId: string): Promise<SettlementResponse> {
-    return apiRequest<SettlementResponse>(`/groups/${groupId}/settlement`, {
   // Get all expenses in a group
   async getGroupExpenses(groupId: string): Promise<Expense[]> {
     return apiRequest<Expense[]>(`/groups/${groupId}/expenses`, {
@@ -247,8 +236,13 @@ export const groupApi = {
     });
   },
 
-  async addMember(groupId: string, userId: string): Promise<AddMemberResponse> {
-    return apiRequest<AddMemberResponse>(`/groups/${groupId}/members`, {
+  // Join group using invite link (URL param)
+  async joinGroupByLink(inviteCode: string): Promise<JoinGroupResponse> {
+    return apiRequest<JoinGroupResponse>(`/groups/join/${inviteCode}`, {
+      method: "GET",
+    });
+  },
+
   // Get settlement calculation for a group
   async getSettlement(groupId: string): Promise<SettlementResponse> {
     return apiRequest<SettlementResponse>(`/groups/${groupId}/settlement`, {
@@ -263,16 +257,6 @@ export const expenseApi = {
   async createExpense(
     data: CreateExpenseRequest
   ): Promise<CreateExpenseResponse> {
-    return apiRequest<CreateExpenseResponse>("/expenses", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-// Expense API functions
-export const expenseApi = {
-  async createExpense(data: CreateExpenseRequest): Promise<CreateExpenseResponse> {
     return apiRequest<CreateExpenseResponse>("/expenses", {
       method: "POST",
       body: JSON.stringify(data),
