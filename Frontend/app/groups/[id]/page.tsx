@@ -6,9 +6,10 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, AlertCircle, Users, ArrowLeft } from "lucide-react";
-import { groupApi, getAvatarUrl } from "@/lib/api";
+import { Loader2, AlertCircle, Users, ArrowLeft, Plus, Receipt } from "lucide-react";
+import { groupApi, expenseApi, getAvatarUrl } from "@/lib/api";
 import type { Group } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -21,6 +22,12 @@ export default function GroupDetailPage() {
   const [group, setGroup] = useState<Group | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Expense form state
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   // Load group details from API
   useEffect(() => {
@@ -48,6 +55,58 @@ export default function GroupDetailPage() {
 
     loadGroupDetails();
   }, [groupId]);
+
+  const handleCreateExpense = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!expenseDescription.trim() || !expenseAmount || isCreatingExpense) {
+      return;
+    }
+
+    const amount = parseFloat(expenseAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setError("Số tiền không hợp lệ");
+      return;
+    }
+
+    try {
+      setIsCreatingExpense(true);
+      setError(null);
+      await expenseApi.createExpense({
+        description: expenseDescription.trim(),
+        amount: amount,
+        groupId: groupId,
+      });
+
+      // Reset form
+      setExpenseDescription("");
+      setExpenseAmount("");
+      setShowExpenseForm(false);
+
+      // Reload group to get updated expenses
+      await loadGroupDetails();
+    } catch (err) {
+      console.error("Failed to create expense:", err);
+      setError(err instanceof Error ? err.message : "Không thể tạo chi tiêu");
+    } finally {
+      setIsCreatingExpense(false);
+    }
+  };
+
+  const loadGroupDetails = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await groupApi.getGroupById(groupId);
+      setGroup(response.group);
+    } catch (err) {
+      console.error("Failed to load group details:", err);
+      setError(
+        err instanceof Error ? err.message : "Không thể tải thông tin nhóm"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -197,15 +256,94 @@ export default function GroupDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Expenses placeholder - will be implemented in next task */}
+        {/* Expenses Card */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Chi tiêu</CardTitle>
+            <Button
+              size="sm"
+              onClick={() => {
+                setShowExpenseForm(!showExpenseForm);
+                if (showExpenseForm) {
+                  setExpenseDescription("");
+                  setExpenseAmount("");
+                  setError(null);
+                }
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {showExpenseForm ? "Đóng" : "Thêm"}
+            </Button>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Chức năng chi tiêu sẽ được kết nối trong task tiếp theo
-            </p>
+            {showExpenseForm && (
+              <form onSubmit={handleCreateExpense} className="space-y-3 mb-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Mô tả</label>
+                  <Input
+                    required
+                    value={expenseDescription}
+                    onChange={(e) => setExpenseDescription(e.target.value)}
+                    placeholder="Ví dụ: Ăn trưa tại nhà hàng ABC"
+                    disabled={isCreatingExpense}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Số tiền (VND)</label>
+                  <Input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    placeholder="500000"
+                    disabled={isCreatingExpense}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isCreatingExpense}>
+                  {isCreatingExpense ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang tạo...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Tạo chi tiêu
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+
+            {!group?.expenses || group.expenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Chưa có chi tiêu nào
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {group.expenses.map((expense) => (
+                  <div
+                    key={expense.id}
+                    className="flex items-center justify-between p-3 rounded-md border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">{expense.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Người trả: {expense.paidBy?.userName || "Không rõ"}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold">
+                      {expense.amount.toLocaleString("vi-VN")}đ
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
