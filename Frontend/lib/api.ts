@@ -302,8 +302,8 @@ export const groupApi = {
   },
 
   // Get group details by ID
-  async getGroupById(groupId: string): Promise<Group> {
-    return apiRequest<Group>(`/groups/${groupId}`, {
+  async getGroupById(groupId: string): Promise<{ group: Group }> {
+    return apiRequest<{ group: Group }>(`/groups/${groupId}`, {
       method: "GET",
     });
   },
