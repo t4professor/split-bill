@@ -1,3 +1,5 @@
+import { ApiNoContentResponse } from '@nestjs/swagger';
+import { promises as fsPromises } from 'fs';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -42,6 +44,8 @@ export class UserController {
 
   // Update user password
   @ApiOperation({ summary: "Update user's password" })
+  @ApiBody({ type: UpdatePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password updated successfully', schema: { example: { message: 'Password updated successfully' } } })
   @UseGuards(JwtAuthGuard)
   @Patch('update-password')
   async updatePassword(@Req() req, @Body() dto: UpdatePasswordDto) {
@@ -53,6 +57,7 @@ export class UserController {
   @Roles('ADMIN')
   @Get('admin/all')
   @ApiOperation({ summary: 'Admin: Get all users' })
+  @ApiResponse({ status: 200, description: 'List of all users', type: Object, isArray: true })
   async getAllUsers() {
     return this.userService.getAllUsers();
   }
@@ -62,6 +67,7 @@ export class UserController {
   @Roles('ADMIN')
   @Get('admin/:id')
   @ApiOperation({ summary: 'Admin: Get user by ID' })
+  @ApiResponse({ status: 200, description: 'User details', type: Object })
   async getUserById(@Param('id') id: string) {
     const user = await this.userService.findById(id);
     if (!user) throw new NotFoundException('User not found');
@@ -94,7 +100,7 @@ export class UserController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully' })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully', schema: { example: { message: 'Avatar uploaded', path: 'uploads/avatars/...' } } })
   async uploadAvatar(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
@@ -102,6 +108,16 @@ export class UserController {
     if (!file) throw new BadRequestException('No file uploaded');
     await this.userService.updateAvatar(req.user.id, file.path);
     return { message: 'Avatar uploaded', path: file.path };
+  }
+
+  // Remove avatar
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Remove user avatar' })
+  @ApiNoContentResponse({ description: 'Avatar removed' })
+  @Patch('remove-avatar')
+  async removeAvatar(@Req() req) {
+    await this.userService.removeAvatar(req.user.id);
+    return { message: 'Avatar removed' };
   }
 
   // Upload payment QR
@@ -128,6 +144,7 @@ export class UserController {
       },
     },
   })
+  @ApiResponse({ status: 200, description: 'Payment QR uploaded', schema: { example: { message: 'Payment QR uploaded', path: 'uploads/payments/...' } } })
   async uploadPaymentQr(
     @UploadedFile() file: Express.Multer.File,
     @Req() req,
@@ -140,6 +157,7 @@ export class UserController {
   // 🖼 Get avatar by user ID
   @Get(':id/avatar')
   @ApiOperation({ summary: 'Get user avatar by ID' })
+  @ApiResponse({ status: 200, description: 'Avatar image file' })
   async getAvatar(@Param('id') id: string, @Res() res: Response) {
     const user = await this.userService.findById(String(id));
     if (!user?.avatarPath) throw new NotFoundException('Avatar not found');
@@ -153,6 +171,7 @@ export class UserController {
   // Get payment QR by user ID
   @Get(':id/payment-qr')
   @ApiOperation({ summary: 'Get user payment QR by ID' })
+  @ApiResponse({ status: 200, description: 'Payment QR image file' })
   async getPaymentQr(@Param('id') id: string, @Res() res: Response) {
     const targetUser = await this.userService.findById(String(id));
     if (!targetUser?.paymentQrPath)
@@ -167,6 +186,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Current user profile', type: Object })
   async getProfile(@Req() req) {
     const user = await this.userService.findById(req.user.id);
     if (!user) throw new NotFoundException('User not found');
@@ -178,6 +198,8 @@ export class UserController {
 
   // Update user profile
   @ApiOperation({ summary: "Used to update the user's profile"})
+  @ApiBody({ type: UpdateProfileDto })
+  @ApiResponse({ status: 200, description: 'Profile updated', type: Object })
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
   @UsePipes(new ValidationPipe({ whitelist: true }))
