@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { Home, Users, Settings, LogOut } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/contexts/AuthContext';
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Home, Users, Settings, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -14,9 +14,9 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/', label: 'Trang chủ', icon: Home },
-  { href: '/groups', label: 'Nhóm của tôi', icon: Users },
-  { href: '/settings', label: 'Cài đặt', icon: Settings },
+  { href: "/", label: "Trang chủ", icon: Home },
+  { href: "/groups", label: "Nhóm của tôi", icon: Users },
+  { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
@@ -26,7 +26,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const handleLogout = () => {
     logout();
-    router.push('/login');
+    router.push("/login");
   };
 
   return (
@@ -44,8 +44,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside
         className={cn(
           // ensure sidebar overlays header and other content
-          'fixed left-0 top-0 z-[9999] h-full w-72 bg-background border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0',
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          "fixed left-0 top-0 z-[9999] h-full w-72 bg-background border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
@@ -55,22 +55,29 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               type="button"
               onClick={() => {
                 onClose();
-                router.push('/account');
+                router.push("/account");
               }}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3">
                 <Avatar>
-                  {user?.avatarUrl ? (
-                    <AvatarImage src={user.avatarUrl} alt={user.name || 'Avatar'} />
+                  {user?.avatarPath ? (
+                    <AvatarImage
+                      src={`http://localhost:3001/${user.avatarPath}`}
+                      alt={`${user.firstName} ${user.lastName}`}
+                    />
                   ) : null}
                   <AvatarFallback>
-                    {user?.name?.[0]?.toUpperCase() || 'U'}
+                    {user?.firstName?.[0]?.toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <p className="text-sm font-medium">{user?.name || 'User Name'}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email || 'user@email.com'}</p>
+                  <p className="text-sm font-medium">
+                    {user ? `${user.firstName} ${user.lastName}` : "User Name"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {user?.email || "user@email.com"}
+                  </p>
                 </div>
               </div>
             </button>
@@ -85,7 +92,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               return (
                 <Link key={item.href} href={item.href} onClick={onClose}>
                   <Button
-                    variant={isActive ? 'secondary' : 'ghost'}
+                    variant={isActive ? "secondary" : "ghost"}
                     className="w-full justify-start"
                   >
                     <Icon className="mr-2 h-4 w-4" />

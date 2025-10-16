@@ -1,7 +1,11 @@
 import * as bcrypt from 'bcrypt';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -14,9 +18,12 @@ export class UserService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     const isMatch = await bcrypt.compare(dto.currentPassword, user.password);
-    if (!isMatch) throw new BadRequestException('Current password is incorrect');
+    if (!isMatch)
+      throw new BadRequestException('Current password is incorrect');
     if (dto.currentPassword === dto.newPassword) {
-      throw new BadRequestException('New password must be different from current password');
+      throw new BadRequestException(
+        'New password must be different from current password',
+      );
     }
     const hashed = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.user.update({
@@ -73,13 +80,16 @@ export class UserService {
         firstName: true,
         lastName: true,
         userName: true,
+        email: true,
         phoneNumber: true,
+        role: true,
         avatarPath: true,
         paymentQrPath: true,
+        createdAt: true,
         updatedAt: true,
       },
     });
 
-    return updated;
+    return { message: 'Profile updated successfully', user: updated };
   }
 }
