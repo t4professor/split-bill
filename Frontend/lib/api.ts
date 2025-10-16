@@ -7,6 +7,12 @@ import {
   UpdateProfileResponse,
   User,
   ApiError,
+  JoinGroupRequest,
+  JoinGroupResponse,
+  CreateGroupRequest,
+  CreateGroupResponse,
+  GetGroupsResponse,
+  GetGroupByIdResponse,
 } from "./types";
 
 // API Configuration
@@ -161,6 +167,61 @@ export const authApi = {
     }
 
     return response.json();
+  },
+
+  // Remove avatar
+  async removeAvatar(): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>("/user/remove-avatar", {
+      method: "PATCH",
+    });
+  },
+};
+
+// Group API functions
+export const groupApi = {
+  async createGroup(data: CreateGroupRequest): Promise<CreateGroupResponse> {
+    return apiRequest<CreateGroupResponse>("/groups", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getUserGroups(): Promise<GetGroupsResponse> {
+    return apiRequest<GetGroupsResponse>("/groups", {
+      method: "GET",
+    });
+  },
+
+  async getGroupById(id: string): Promise<GetGroupByIdResponse> {
+    return apiRequest<GetGroupByIdResponse>(`/groups/${id}`, {
+      method: "GET",
+    });
+  },
+
+  async joinGroup(data: JoinGroupRequest): Promise<JoinGroupResponse> {
+    return apiRequest<JoinGroupResponse>("/groups/join", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getGroupExpenses(groupId: string): Promise<any> {
+    return apiRequest(`/groups/${groupId}/expenses`, {
+      method: "GET",
+    });
+  },
+
+  async getSettlement(groupId: string): Promise<any> {
+    return apiRequest(`/groups/${groupId}/settlement`, {
+      method: "GET",
+    });
+  },
+
+  async addMember(groupId: string, userId: string): Promise<any> {
+    return apiRequest(`/groups/${groupId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
   },
 };
 
