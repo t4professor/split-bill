@@ -1,3 +1,4 @@
+
 import * as bcrypt from 'bcrypt';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 
@@ -11,8 +12,17 @@ import { User } from '@prisma/client';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
+
 export class UserService {
   constructor(private prisma: PrismaService) {}
+
+
+  async removeAvatar(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarPath: null },
+    });
+  }
 
   async updatePassword(userId: string, dto: UpdatePasswordDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
