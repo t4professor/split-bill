@@ -196,8 +196,8 @@ export const groupApi = {
   },
 
   // Get all groups for current user
-  async getUserGroups(): Promise<Group[]> {
-    return apiRequest<Group[]>("/groups", {
+  async getUserGroups(): Promise<{ groups: Group[] }> {
+    return apiRequest<{ groups: Group[] }>("/groups", {
       method: "GET",
     });
   },
