@@ -33,6 +33,11 @@ export default function GroupDetailPage() {
   const [settlement, setSettlement] = useState<SettlementResponse | null>(null);
   const [isLoadingSettlement, setIsLoadingSettlement] = useState(false);
 
+  // Add member state
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
+  const [memberUserId, setMemberUserId] = useState("");
+  const [isAddingMember, setIsAddingMember] = useState(false);
+
   // Load group details from API
   useEffect(() => {
     if (!groupId) {
@@ -129,6 +134,33 @@ export default function GroupDetailPage() {
       // Don't set error here, just log it
     } finally {
       setIsLoadingSettlement(false);
+    }
+  };
+
+  const handleAddMember = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!memberUserId.trim() || isAddingMember) {
+      return;
+    }
+
+    try {
+      setIsAddingMember(true);
+      setError(null);
+      await groupApi.addMember(groupId, {
+        userId: memberUserId.trim(),
+      });
+
+      // Reset form
+      setMemberUserId("");
+      setShowAddMemberForm(false);
+
+      // Reload group to show new member
+      await loadGroupDetails();
+    } catch (err) {
+      console.error("Failed to add member:", err);
+      setError(err instanceof Error ? err.message : "Không thể thêm thành viên");
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
@@ -232,12 +264,52 @@ export default function GroupDetailPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Thành viên ({group.members?.length || 0})</CardTitle>
-            <Button size="sm" onClick={() => alert("Thêm thành viên (coming soon)")}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setShowAddMemberForm(!showAddMemberForm);
+                if (showAddMemberForm) {
+                  setMemberUserId("");
+                  setError(null);
+                }
+              }}
+            >
               <Users className="mr-2 h-4 w-4" />
-              Thêm
+              {showAddMemberForm ? "Đóng" : "Thêm"}
             </Button>
           </CardHeader>
           <CardContent>
+            {showAddMemberForm && (
+              <form onSubmit={handleAddMember} className="space-y-3 mb-4 p-3 border rounded-md">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">User ID của thành viên</label>
+                  <Input
+                    required
+                    value={memberUserId}
+                    onChange={(e) => setMemberUserId(e.target.value)}
+                    placeholder="Nhập UUID của user (ví dụ: 123e4567-e89b-12d3-a456-426614174000)"
+                    disabled={isAddingMember}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Lưu ý: Hiện tại cần nhập UUID của user. Trong tương lai sẽ có chức năng tìm kiếm user theo email/username.
+                  </p>
+                </div>
+                <Button type="submit" className="w-full" disabled={isAddingMember}>
+                  {isAddingMember ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang thêm...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Thêm thành viên
+                    </>
+                  )}
+                </Button>
+              </form>
+            )}
+
             {!group.members || group.members.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 Chưa có thành viên nào
