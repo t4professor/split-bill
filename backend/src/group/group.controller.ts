@@ -40,6 +40,21 @@ export class GroupController {
     return this.groupService.getUserGroups(req.user.sub);
   }
 
+  @Post('join')
+  @ApiOperation({ summary: 'Join a group using invite code (body)' })
+  joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
+    return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
+  }
+
+  @Get('join/:inviteCode')
+  @ApiOperation({ summary: 'Join a group using invite link (URL)' })
+  joinGroupByLink(
+    @Param('inviteCode') inviteCode: string,
+    @Request() req: any)
+    {
+    return this.groupService.joinGroupByInviteCode(inviteCode, req.user.sub);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get group details by ID' })
   @ApiResponse({ status: 200, description: 'Group details', type: Object })
@@ -71,13 +86,5 @@ export class GroupController {
   @ApiResponse({ status: 200, description: 'Settlement details', type: Object })
   getSettlement(@Param('id') id: string, @Request() req: any) {
     return this.groupService.calculateSettlement(id, req.user.sub);
-  }
-
-  @Post('join')
-  @ApiOperation({ summary: 'Join a group using invite code' })
-  @ApiBody({ type: JoinGroupDto })
-  @ApiResponse({ status: 201, description: 'Joined group', type: Object })
-  joinGroup(@Request() req: any, @Body() joinGroupDto: JoinGroupDto) {
-    return this.groupService.joinGroupByInviteCode(joinGroupDto.inviteCode, req.user.sub);
   }
 }
