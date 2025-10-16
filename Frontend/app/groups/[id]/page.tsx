@@ -6,9 +6,9 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, AlertCircle, Users, ArrowLeft, Plus, Receipt } from "lucide-react";
+import { Loader2, AlertCircle, Users, ArrowLeft, Plus, Receipt, ArrowRight } from "lucide-react";
 import { groupApi, expenseApi, getAvatarUrl } from "@/lib/api";
-import type { Group } from "@/lib/types";
+import type { Group, SettlementResponse } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 
 export default function GroupDetailPage() {
@@ -28,6 +28,10 @@ export default function GroupDetailPage() {
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [isCreatingExpense, setIsCreatingExpense] = useState(false);
+
+  // Settlement state
+  const [settlement, setSettlement] = useState<SettlementResponse | null>(null);
+  const [isLoadingSettlement, setIsLoadingSettlement] = useState(false);
 
   // Load group details from API
   useEffect(() => {
@@ -98,6 +102,13 @@ export default function GroupDetailPage() {
       setError(null);
       const response = await groupApi.getGroupById(groupId);
       setGroup(response.group);
+
+      // Also load settlement if there are expenses
+      if (response.group.expenses && response.group.expenses.length > 0) {
+        await loadSettlement();
+      } else {
+        setSettlement(null);
+      }
     } catch (err) {
       console.error("Failed to load group details:", err);
       setError(
@@ -105,6 +116,19 @@ export default function GroupDetailPage() {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadSettlement = async () => {
+    try {
+      setIsLoadingSettlement(true);
+      const data = await groupApi.getSettlement(groupId);
+      setSettlement(data);
+    } catch (err) {
+      console.error("Failed to load settlement:", err);
+      // Don't set error here, just log it
+    } finally {
+      setIsLoadingSettlement(false);
     }
   };
 
@@ -347,15 +371,107 @@ export default function GroupDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Settlement placeholder - will be implemented in next task */}
+        {/* Settlement Card */}
         <Card>
           <CardHeader>
             <CardTitle>Thanh toán</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Chức năng thanh toán sẽ được kết nối trong task tiếp theo
-            </p>
+            {isLoadingSettlement ? (
+              <div className="text-center py-4">
+                <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Đang tính toán...</p>
+              </div>
+            ) : !settlement || settlement.transactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {!group?.expenses || group.expenses.length === 0
+                  ? "Chưa có chi tiêu nào để thanh toán"
+                  : "Mọi người đã cân bằng, không cần thanh toán"}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="grid grid-cols-3 gap-4 p-3 bg-muted rounded-md">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Tổng chi</p>
+                    <p className="text-sm font-semibold">
+                      {settlement.totalExpenses.toLocaleString("vi-VN")}đ
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Thành viên</p>
+                    <p className="text-sm font-semibold">{settlement.memberCount}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Mỗi người</p>
+                    <p className="text-sm font-semibold">
+                      {settlement.fairSharePerPerson.toLocaleString("vi-VN")}đ
+                    </p>
+                  </div>
+                </div>
+
+                {/* Transactions */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Giao dịch cần thực hiện:</p>
+                  {settlement.transactions.map((transaction, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 rounded-md border bg-card"
+                    >
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="text-sm font-medium">
+                          {transaction.fromUserName}
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {transaction.toUserName}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold text-green-600">
+                        {transaction.amount.toLocaleString("vi-VN")}đ
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Balances */}
+                {settlement.balances && settlement.balances.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <p className="text-sm font-medium">Chi tiết số dư:</p>
+                    <div className="space-y-1">
+                      {settlement.balances.map((balance) => (
+                        <div
+                          key={balance.userId}
+                          className="flex items-center justify-between text-sm p-2 rounded-md hover:bg-accent"
+                        >
+                          <span>{balance.userName}</span>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">
+                              Đã trả: {balance.totalPaid.toLocaleString("vi-VN")}đ
+                            </p>
+                            <p
+                              className={`font-medium ${
+                                balance.balance > 0
+                                  ? "text-green-600"
+                                  : balance.balance < 0
+                                  ? "text-red-600"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {balance.balance > 0
+                                ? `+${balance.balance.toLocaleString("vi-VN")}đ`
+                                : balance.balance < 0
+                                ? `${balance.balance.toLocaleString("vi-VN")}đ`
+                                : "Cân bằng"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
