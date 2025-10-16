@@ -1,49 +1,70 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [userNameOrEmail, setUserNameOrEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const { login, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
 
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/');
+      router.push("/");
     }
   }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
-    if (!email || !password) {
-      setError('Vui lòng nhập đầy đủ thông tin');
+    // Basic validation
+    if (!userNameOrEmail.trim()) {
+      setError("Vui lòng nhập tên đăng nhập hoặc email");
+      return;
+    }
+
+    if (!password.trim()) {
+      setError("Vui lòng nhập mật khẩu");
       return;
     }
 
     try {
-      await login(email, password);
+      await login(userNameOrEmail.trim(), password);
+      // Login successful, redirect will happen via useEffect
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng nhập thất bại');
+      console.error("Login error:", err);
+      setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
     }
   };
 
   // Show loading while checking auth
   if (isAuthenticated) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Đang chuyển hướng...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -76,27 +97,23 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          <ErrorAlert error={error} className="mb-4" />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="userNameOrEmail">Tên đăng nhập hoặc Email</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="userNameOrEmail"
+                type="text"
+                placeholder="Tên đăng nhập hoặc email của bạn"
+                value={userNameOrEmail}
+                onChange={(e) => setUserNameOrEmail(e.target.value)}
                 disabled={isLoading}
                 required
+                autoComplete="username"
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Mật khẩu</Label>
               <Input
@@ -107,6 +124,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
                 required
+                autoComplete="current-password"
               />
             </div>
 
@@ -117,13 +135,16 @@ export default function LoginPage() {
                   Đang đăng nhập...
                 </>
               ) : (
-                'Đăng nhập'
+                "Đăng nhập"
               )}
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">
-              Chưa có tài khoản?{' '}
-              <Link href="/register" className="text-primary hover:underline font-medium">
+              Chưa có tài khoản?{" "}
+              <Link
+                href="/register"
+                className="text-primary hover:underline font-medium"
+              >
                 Đăng ký ngay
               </Link>
             </div>
@@ -131,7 +152,7 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-6 border-t">
             <p className="text-xs text-center text-muted-foreground">
-              💡 Tip: Sử dụng bất kỳ email và mật khẩu nào để đăng nhập (demo)
+              💡 Bạn có thể đăng nhập bằng tên đăng nhập hoặc email
             </p>
           </div>
         </CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,20 +9,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { GROUP_DETAIL_STORAGE_KEY, GROUPS_STORAGE_KEY } from "@/lib/constants";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   seedGroupDetails,
   type SeedExpense,
   type SeedGroupDetail,
 } from "@/lib/seedData";
+import { MemberSelector } from "@/components/ui/MemberSelector";
 import { Plus, Receipt } from "lucide-react";
 type Expense = SeedExpense;
 type GroupDetail = SeedGroupDetail;
+type GroupMember = GroupDetail["members"][number];
 
 type GroupSummary = {
   id: string;
@@ -30,6 +25,20 @@ type GroupSummary = {
   description?: string;
   members: number;
   totalBill: number;
+};
+
+type Settlement = {
+  from: string;
+  to: string;
+  amount: number;
+};
+
+type NewExpenseState = {
+  description: string;
+  amount: string;
+  payerId: string;
+  participantIds: string[];
+  createdBy: string;
 };
 
 export default function GroupDetailPage() {
@@ -42,18 +51,122 @@ export default function GroupDetailPage() {
 
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [groupSummary, setGroupSummary] = useState<GroupSummary | null>(null);
-  const [newExpense, setNewExpense] = useState({
+  const [newExpense, setNewExpense] = useState<NewExpenseState>({
     description: "",
     amount: "",
-    paidBy: "",
-    participantIds: [] as string[],
+    payerId: "",
+    participantIds: [],
+    createdBy: "",
   });
   const [newMemberName, setNewMemberName] = useState("");
   const [showAddMember, setShowAddMember] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
 
-  const members = groupDetail?.members ?? [];
-  const expenses = groupDetail?.expenses ?? [];
+  const members = useMemo(() => groupDetail?.members ?? [], [groupDetail]);
+  const expenses = useMemo(() => groupDetail?.expenses ?? [], [groupDetail]);
+
+  const memberIds = useMemo(() => members.map((member) => member.id), [members]);
+  const memberMap = useMemo(() => {
+    const map = new Map<string, GroupMember>();
+    members.forEach((member) => {
+      map.set(member.id, member);
+    });
+    return map;
+  }, [members]);
+
+  const getMemberName = useCallback(
+    (id: string): string => memberMap.get(id)?.name ?? "",
+    [memberMap]
+  );
+
+  const normalizeExpenseState = useCallback(
+    (
+      state: NewExpenseState,
+      options: { keepCreatorFallback?: boolean } = {}
+    ): NewExpenseState => {
+      const keepCreatorFallback = options.keepCreatorFallback ?? false;
+
+      if (memberIds.length === 0) {
+        const trimmedCreator = state.createdBy.trim();
+        const desiredCreator = keepCreatorFallback ? trimmedCreator : "";
+
+        if (
+          state.payerId === "" &&
+          state.participantIds.length === 0 &&
+          state.createdBy === desiredCreator
+        ) {
+          return state;
+        }
+
+        return {
+          ...state,
+          payerId: "",
+          participantIds: [],
+          createdBy: desiredCreator,
+        };
+      }
+
+      const resolvedParticipants = state.participantIds.filter((id) =>
+        memberMap.has(id)
+      );
+      const baseParticipantIds =
+        resolvedParticipants.length > 0 ? resolvedParticipants : memberIds;
+
+      const fallbackPayerId = baseParticipantIds[0] ?? memberIds[0] ?? "";
+      const payerId = baseParticipantIds.includes(state.payerId)
+        ? state.payerId
+        : fallbackPayerId;
+
+      const normalizedParticipantIds = (() => {
+        if (!payerId) {
+          const seen = new Set<string>();
+          return baseParticipantIds.filter((id) => {
+            if (seen.has(id)) {
+              return false;
+            }
+            seen.add(id);
+            return true;
+          });
+        }
+
+        const reordered = [
+          payerId,
+          ...baseParticipantIds.filter((id) => id !== payerId),
+        ];
+        const seen = new Set<string>();
+        return reordered.filter((id) => {
+          if (seen.has(id)) {
+            return false;
+          }
+          seen.add(id);
+          return true;
+        });
+      })();
+
+      const payerName = getMemberName(payerId);
+
+      if (
+        payerId === state.payerId &&
+        arraysEqual(normalizedParticipantIds, state.participantIds) &&
+        payerName === state.createdBy
+      ) {
+        return state;
+      }
+
+      return {
+        ...state,
+        payerId,
+        participantIds: normalizedParticipantIds,
+        createdBy: payerName,
+      };
+    },
+    [getMemberName, memberIds, memberMap]
+  );
+
+  useEffect(() => {
+    setNewExpense((previous) => normalizeExpenseState(previous));
+  }, [normalizeExpenseState]);
 
   useEffect(() => {
     if (!groupId) {
@@ -94,9 +207,7 @@ export default function GroupDetailPage() {
         expenses: detail.expenses ?? [],
       };
 
-      setGroupDetail(normalized);
-      persistGroupDetail(normalized);
-      syncGroupSummary(normalized, setGroupSummary);
+      commitDetail(normalized);
     } else {
       setGroupDetail(null);
       if (summary) {
@@ -104,10 +215,19 @@ export default function GroupDetailPage() {
       } else {
         setGroupSummary(null);
       }
+      setSettlements([]);
     }
 
     setIsLoading(false);
   }, [groupId]);
+
+  const commitDetail = (detail: GroupDetail): void => {
+    const recalculated = recalculateGroupDetail(detail);
+    setGroupDetail(recalculated.detail);
+    setSettlements(recalculated.settlements);
+    persistGroupDetail(recalculated.detail);
+    syncGroupSummary(recalculated.detail, setGroupSummary);
+  };
 
   const createDetailSkeleton = (): GroupDetail => ({
     id: groupId,
@@ -137,9 +257,7 @@ export default function GroupDetailPage() {
       ],
     };
 
-    setGroupDetail(nextDetail);
-    persistGroupDetail(nextDetail);
-    syncGroupSummary(nextDetail, setGroupSummary);
+    commitDetail(nextDetail);
     setNewMemberName("");
   };
 
@@ -153,9 +271,7 @@ export default function GroupDetailPage() {
       members: groupDetail.members.filter((member) => member.id !== memberId),
     };
 
-    setGroupDetail(nextDetail);
-    persistGroupDetail(nextDetail);
-    syncGroupSummary(nextDetail, setGroupSummary);
+    commitDetail(nextDetail);
   };
 
   const handleAddExpense = (event: React.FormEvent<HTMLFormElement>) => {
@@ -164,34 +280,51 @@ export default function GroupDetailPage() {
       return;
     }
 
-    const amountValue = parseInt(newExpense.amount, 10);
-    const safeAmount = Number.isNaN(amountValue) ? 0 : Math.max(amountValue, 0);
+    const payer = memberMap.get(newExpense.payerId);
+    if (!payer) {
+      return;
+    }
+
+    const validParticipantIds = newExpense.participantIds.filter((id) =>
+      memberMap.has(id)
+    );
+    const participantIds =
+      validParticipantIds.length > 0 ? validParticipantIds : memberIds;
+
+    if (participantIds.length === 0) {
+      return;
+    }
+
+    const safeAmount = toNonNegativeInteger(newExpense.amount);
 
     const baseDetail = groupDetail ?? createDetailSkeleton();
-    const nextDetail: GroupDetail = {
-      ...baseDetail,
-      expenses: [
-        ...baseDetail.expenses,
-        {
-          id: crypto.randomUUID(),
-          description: newExpense.description.trim(),
-          amount: safeAmount,
-          paidBy: newExpense.paidBy.trim(),
-          date: new Date().toISOString(),
-          participantIds: newExpense.participantIds,
-        },
-      ],
+    const expense: Expense = {
+      id: crypto.randomUUID(),
+      description: newExpense.description.trim(),
+      amount: safeAmount,
+      paidBy: payer.name,
+      paidById: payer.id,
+      date: new Date().toISOString(),
+      participantIds,
+      createdBy: payer.name,
     };
 
-    setGroupDetail(nextDetail);
-    persistGroupDetail(nextDetail);
-    syncGroupSummary(nextDetail, setGroupSummary);
-    setNewExpense({
-      description: "",
-      amount: "",
-      paidBy: "",
-      participantIds: [],
-    });
+    const nextDetail: GroupDetail = {
+      ...baseDetail,
+      expenses: [...baseDetail.expenses, expense],
+    };
+
+    commitDetail(nextDetail);
+    setNewExpense((previous) =>
+      normalizeExpenseState({
+        ...previous,
+        description: "",
+        amount: "",
+        payerId: payer.id,
+        participantIds,
+        createdBy: payer.name,
+      })
+    );
   };
 
   const title = groupDetail
@@ -354,16 +487,41 @@ export default function GroupDetailPage() {
                       <p className="text-xs text-muted-foreground">
                         {new Date(expense.date).toLocaleDateString("vi-VN")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Tham gia:{" "}
-                        {expense.participantIds
-                          .map((id) => members.find((m) => m.id === id)?.name)
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
                     </div>
                     <p className="font-semibold">
                       {expense.amount.toLocaleString("vi-VN")}đ
+                    </p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cân bằng khoản nợ</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {settlements.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Mọi người đã cân bằng, không có khoản nợ nào.
+                </p>
+              ) : (
+                settlements.map((settlement, index) => (
+                  <div
+                    key={`${settlement.from}-${settlement.to}-${index}`}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {settlement.from} cần trả {settlement.to}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Sau khi chia theo các khoản chi liên quan
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-destructive">
+                      {settlement.amount.toLocaleString("vi-VN")}đ
                     </p>
                   </div>
                 ))
@@ -379,18 +537,30 @@ export default function GroupDetailPage() {
               <form onSubmit={handleAddExpense} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium">Người chi</label>
-                  <Input
-                    type="text"
-                    value={newExpense.paidBy}
-                    onChange={(event) =>
-                      setNewExpense({
-                        ...newExpense,
-                        paidBy: event.target.value,
-                      })
+                  <MemberSelector
+                    members={members}
+                    value={newExpense.payerId}
+                    onChange={(value) => {
+                      if (typeof value !== "string") {
+                        return;
+                      }
+
+                      setNewExpense((previous) =>
+                        normalizeExpenseState({
+                          ...previous,
+                          payerId: value,
+                          participantIds: previous.participantIds.includes(value)
+                            ? previous.participantIds
+                            : [...previous.participantIds, value],
+                        })
+                      );
+                    }}
+                    placeholder={
+                      members.length === 0
+                        ? "Thêm thành viên để ghi nhận chi tiêu"
+                        : "Chọn người chi"
                     }
-                    placeholder="Nguyễn Văn A"
                     required
-                    className="text-sm"
                   />
                 </div>
                 <div>
@@ -400,10 +570,10 @@ export default function GroupDetailPage() {
                     type="number"
                     value={newExpense.amount}
                     onChange={(event) =>
-                      setNewExpense({
-                        ...newExpense,
+                      setNewExpense((current) => ({
+                        ...current,
                         amount: event.target.value,
-                      })
+                      }))
                     }
                     placeholder="Ex. 500000"
                     className="text-sm"
@@ -417,72 +587,52 @@ export default function GroupDetailPage() {
                     type="text"
                     value={newExpense.description}
                     onChange={(event) =>
-                      setNewExpense({
-                        ...newExpense,
+                      setNewExpense((current) => ({
+                        ...current,
                         description: event.target.value,
-                      })
+                      }))
                     }
                     placeholder="Mục đích của chi tiêu này"
                     required
                     className="text-sm"
                   />
                   <div className="pt-4">
-                    <label className="block text-sm font-medium">
-                      Thành viên của chi tiêu này
-                    </label>
-                    <Select
-                      onValueChange={(value) => {
-                        setNewExpense((prev) => {
-                          const participantIds = prev.participantIds.includes(
-                            value
-                          )
-                            ? prev.participantIds.filter((id) => id !== value)
-                            : [...prev.participantIds, value];
-                          return { ...prev, participantIds };
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn thành viên" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {newExpense.participantIds.map((id) => {
-                        const member = members.find((m) => m.id === id);
-                        return (
-                          <span
-                            key={id}
-                            className="bg-gray-200 px-2 py-1 rounded"
-                          >
-                            {member?.name}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNewExpense((prev) => ({
-                                  ...prev,
-                                  participantIds: prev.participantIds.filter(
-                                    (pid) => pid !== id
-                                  ),
-                                }))
-                              }
-                              className="ml-1 text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
+                    <MemberSelector
+                      members={members.filter((member) => member.id !== newExpense.payerId)}
+                      value={newExpense.participantIds.filter(
+                        (id) => id !== newExpense.payerId
+                      )}
+                      onChange={(value) => {
+                        if (!Array.isArray(value)) {
+                          return;
+                        }
+
+                        setNewExpense((previous) =>
+                          normalizeExpenseState({
+                            ...previous,
+                            participantIds: [...value, previous.payerId].filter(Boolean),
+                          })
                         );
-                      })}
-                    </div>
+                      }}
+                      label="Thành viên của chi tiêu này"
+                      placeholder={
+                        members.length === 0
+                          ? "Chưa có thành viên"
+                          : "Chọn thành viên"
+                      }
+                      multiple
+                    />
                   </div>
                 </div>
-                <Button type="submit" className="w-full">
+                <p className="text-xs text-muted-foreground">
+                  Người tạo sẽ tự động là người chi:{" "}
+                  {getMemberName(newExpense.payerId) || "Chưa xác định"}
+                </p>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={members.length === 0}
+                >
                   Lưu chi tiêu
                 </Button>
               </form>
@@ -560,16 +710,196 @@ function writeGroupSummaries(summaries: GroupSummary[]): void {
     return;
   }
 
-  window.localStorage.setItem(
-    GROUPS_STORAGE_KEY,
-    JSON.stringify(summaries)
-  );
-  notifyDataChanged();
   window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(summaries));
+  notifyDataChanged();
+}
+
+function toNonNegativeInteger(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? 0 : Math.max(parsed, 0);
 }
 
 function calculateTotal(expenses: Expense[]): number {
   return expenses.reduce((sum, expense) => sum + expense.amount, 0);
+}
+
+function arraysEqual(first: string[], second: string[]): boolean {
+  if (first.length !== second.length) {
+    return false;
+  }
+
+  const sortedFirst = [...first].sort();
+  const sortedSecond = [...second].sort();
+
+  return sortedFirst.every((value, index) => value === sortedSecond[index]);
+}
+
+function recalculateGroupDetail(detail: GroupDetail): {
+  detail: GroupDetail;
+  settlements: Settlement[];
+} {
+  const members = detail.members ?? [];
+  const expenses = detail.expenses ?? [];
+
+  const memberById = new Map<string, SeedGroupDetail["members"][number]>();
+  const memberIdByName = new Map<string, string>();
+  members.forEach((member) => {
+    memberById.set(member.id, member);
+    memberIdByName.set(member.name, member.id);
+  });
+
+  if (members.length === 0) {
+    return {
+      detail: {
+        ...detail,
+        members: members.map((member) => ({
+          ...member,
+          spent: 0,
+          owes: 0,
+        })),
+      },
+      settlements: [],
+    };
+  }
+  const memberIds = new Set(members.map((member) => member.id));
+  const defaultParticipantIds = members.map((member) => member.id);
+
+  const normalizedExpenses = expenses.map((expense) => {
+    const rawParticipants: string[] = Array.isArray(expense.participantIds)
+      ? expense.participantIds
+      : defaultParticipantIds;
+    const filteredParticipants = rawParticipants.filter((id) =>
+      memberIds.has(id)
+    );
+    const participants =
+      filteredParticipants.length > 0 ? filteredParticipants : defaultParticipantIds;
+
+    const hasValidPaidById =
+      typeof expense.paidById === "string" && memberIds.has(expense.paidById);
+    const resolvedPayerId = hasValidPaidById
+      ? expense.paidById
+  : memberIdByName.get(expense.paidBy) ?? (participants[0] ?? "");
+
+    const resolvedPayerName = resolvedPayerId
+      ? memberById.get(resolvedPayerId)?.name ?? expense.paidBy
+      : expense.paidBy;
+
+    const createdBy = resolvedPayerName ?? "";
+
+    return {
+      ...expense,
+      paidBy: resolvedPayerName ?? "",
+      paidById: resolvedPayerId || undefined,
+      participantIds: participants,
+      createdBy,
+    };
+  });
+
+  const shareByMember = new Map<string, number>();
+  const spentByMember = new Map<string, number>();
+
+  normalizedExpenses.forEach((expense) => {
+    const participants = expense.participantIds ?? defaultParticipantIds;
+    if (participants.length === 0) {
+      return;
+    }
+
+    const share = expense.amount / participants.length;
+    participants.forEach((memberId) => {
+      if (!memberIds.has(memberId)) {
+        return;
+      }
+      shareByMember.set(
+        memberId,
+        (shareByMember.get(memberId) ?? 0) + share
+      );
+    });
+
+    const hasValidPaidById =
+      typeof expense.paidById === "string" && memberIds.has(expense.paidById);
+    const payerId = hasValidPaidById
+      ? expense.paidById
+      : memberIdByName.get(expense.paidBy);
+
+    if (payerId) {
+      spentByMember.set(
+        payerId,
+        (spentByMember.get(payerId) ?? 0) + expense.amount
+      );
+    }
+  });
+
+  const updatedMembers = members.map((member) => {
+    const spent = spentByMember.get(member.id) ?? 0;
+    const share = shareByMember.get(member.id) ?? 0;
+    const owes = Math.round(share - spent);
+    return {
+      ...member,
+      spent,
+      owes,
+    };
+  });
+
+  const totalOwes = updatedMembers.reduce((sum, member) => sum + member.owes, 0);
+  if (totalOwes !== 0) {
+    const adjustIndex = updatedMembers.findIndex((member) => member.owes !== 0);
+    const targetIndex = adjustIndex === -1 ? 0 : adjustIndex;
+    updatedMembers[targetIndex] = {
+      ...updatedMembers[targetIndex],
+      owes: updatedMembers[targetIndex].owes - totalOwes,
+    };
+  }
+
+  const settlements = buildSettlements(updatedMembers);
+
+  return {
+    detail: {
+      ...detail,
+      members: updatedMembers,
+      expenses: normalizedExpenses,
+    },
+    settlements,
+  };
+}
+
+function buildSettlements(members: SeedGroupDetail["members"]): Settlement[] {
+  const debtors = members
+    .filter((member) => member.owes > 0)
+    .map((member) => ({ name: member.name, amount: member.owes }));
+  const creditors = members
+    .filter((member) => member.owes < 0)
+    .map((member) => ({ name: member.name, amount: Math.abs(member.owes) }));
+
+  const settlements: Settlement[] = [];
+  let debtorIndex = 0;
+  let creditorIndex = 0;
+
+  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+    const debtor = debtors[debtorIndex];
+    const creditor = creditors[creditorIndex];
+    const amount = Math.min(debtor.amount, creditor.amount);
+
+    if (amount > 0) {
+      settlements.push({
+        from: debtor.name,
+        to: creditor.name,
+        amount,
+      });
+    }
+
+    debtor.amount -= amount;
+    creditor.amount -= amount;
+
+    if (debtor.amount <= 0) {
+      debtorIndex += 1;
+    }
+
+    if (creditor.amount <= 0) {
+      creditorIndex += 1;
+    }
+  }
+
+  return settlements;
 }
 
 function syncGroupSummary(

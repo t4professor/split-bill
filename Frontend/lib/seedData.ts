@@ -18,8 +18,10 @@ export type SeedExpense = {
   description: string;
   amount: number;
   paidBy: string;
+  paidById?: string;
   date: string;
   participantIds: string[];
+  createdBy?: string;
 };
 
 export type SeedGroupDetail = {
@@ -52,24 +54,30 @@ export const seedGroupDetails: Record<string, SeedGroupDetail> = {
         description: "Khách sạn",
         amount: 1500000,
         paidBy: "Trần Thị B",
+        paidById: "2",
         date: "2024-01-15",
-        participantIds: ["1", "2"],
+  participantIds: ["1", "2", "3"],
+  createdBy: "Trần Thị B",
       },
       {
         id: "2",
         description: "Ăn tối",
         amount: 600000,
         paidBy: "Nguyễn Văn A",
+        paidById: "1",
         date: "2024-01-15",
-        participantIds: ["1", "3"],
+  participantIds: ["1", "2", "3"],
+  createdBy: "Nguyễn Văn A",
       },
       {
         id: "3",
         description: "Xăng xe",
         amount: 500000,
         paidBy: "Trần Thị B",
+        paidById: "2",
         date: "2024-01-16",
-        participantIds: ["2", "3"],
+  participantIds: ["1", "2", "3"],
+  createdBy: "Trần Thị B",
       },
     ],
   },
