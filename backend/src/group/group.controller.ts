@@ -63,7 +63,7 @@ export class GroupController {
   }
 
   @Post(':id/members')
-  @ApiOperation({ summary: 'Add a member to group' })
+  @ApiOperation({ summary: 'Add a member to group by email or username' })
   @ApiBody({ type: AddMemberDto })
   @ApiResponse({ status: 201, description: 'Member added', type: Object })
   addMember(
