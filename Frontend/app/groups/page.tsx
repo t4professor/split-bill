@@ -25,6 +25,9 @@ export default function GroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
 
   // Load groups from API
   useEffect(() => {
@@ -39,7 +42,9 @@ export default function GroupsPage() {
       setGroups(data.groups);
     } catch (err) {
       console.error("Failed to load groups:", err);
-      setError(err instanceof Error ? err.message : "Không thể tải danh sách nhóm");
+      setError(
+        err instanceof Error ? err.message : "Không thể tải danh sách nhóm"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -75,6 +80,29 @@ export default function GroupsPage() {
       setIsCreating(false);
     }
   };
+  const handleJoinGroup = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!inviteCode.trim() || isJoining) {
+      return;
+    }
+
+    try {
+      setIsJoining(true);
+      setError(null);
+      const response = await groupApi.joinGroupByCode({
+        inviteCode: inviteCode.trim(),
+      });
+
+      await loadGroups();
+      setInviteCode("");
+      setShowJoinForm(false);
+    } catch (err) {
+      console.error("Failed to join group:", err);
+      setError(err instanceof Error ? err.message : "Không thể tham gia nhóm");
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   const hasGroups = groups.length > 0;
 
@@ -82,21 +110,48 @@ export default function GroupsPage() {
     <MainLayout
       title="Nhóm của tôi"
       rightAction={
-        <Button
-          size="sm"
-          onClick={() => {
-            const nextState = !showCreator;
-            setShowCreator(nextState);
-            if (!nextState) {
-              resetCreator();
-              setError(null);
-            }
-          }}
-          disabled={isLoading}
-        >
-          <span className="text-lg leading-none mr-2">+</span>
-          {showCreator ? "Đóng" : "Tạo nhóm"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const nextState = !showJoinForm;
+              setShowJoinForm(nextState);
+              if (!nextState) {
+                setInviteCode("");
+                setError(null);
+              }
+              // Close create form if opening join form
+              if (nextState) {
+                setShowCreator(false);
+                resetCreator();
+              }
+            }}
+            disabled={isLoading}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            {showJoinForm ? "Đóng" : "Vào nhóm"}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              const nextState = !showCreator;
+              setShowCreator(nextState);
+              if (!nextState) {
+                resetCreator();
+                setError(null);
+              }
+              if (nextState) {
+                setShowJoinForm(false);
+                setInviteCode("");
+              }
+            }}
+            disabled={isLoading}
+          >
+            <span className="text-lg leading-none mr-2">+</span>
+            {showCreator ? "Đóng" : "Tạo nhóm"}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4">
@@ -160,12 +215,56 @@ export default function GroupsPage() {
             </CardContent>
           </Card>
         )}
+        {showJoinForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Tham gia nhóm</CardTitle>
+              <CardDescription>
+                Nhập mã mời để tham gia vào một nhóm có sẵn.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleJoinGroup}>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Mã mời</label>
+                  <input
+                    required
+                    value={inviteCode}
+                    onChange={(event) => setInviteCode(event.target.value)}
+                    placeholder="Ví dụ: ABC123"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    disabled={isJoining}
+                    maxLength={8}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Mã mời gồm 8 ký tự được cung cấp bởi người tạo nhóm
+                  </p>
+                </div>
+                <Button type="submit" className="w-full" disabled={isJoining}>
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang tham gia...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Tham gia nhóm
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {isLoading ? (
           <Card>
             <CardContent className="pt-6 text-center">
               <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground">Đang tải danh sách nhóm...</p>
+              <p className="text-muted-foreground">
+                Đang tải danh sách nhóm...
+              </p>
             </CardContent>
           </Card>
         ) : !hasGroups ? (
@@ -178,7 +277,10 @@ export default function GroupsPage() {
                   <span className="mr-2 text-lg leading-none">+</span>
                   Tạo nhóm đầu tiên
                 </Button>
-                <Button variant="outline" onClick={() => router.push("/groups/join")}>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/groups/join")}
+                >
                   <UserPlus className="mr-2 h-4 w-4" />
                   Tham gia nhóm
                 </Button>
