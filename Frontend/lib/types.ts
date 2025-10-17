@@ -238,3 +238,42 @@ export interface AddMemberResponse {
   message: string;
   member: GroupMember;
 }
+
+// Payment types
+export interface Payment {
+  id: string;
+  groupId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  note?: string;
+  status: 'CONFIRMED' | 'PENDING' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
+  fromUser?: {
+    id: string;
+    userName: string;
+    email: string;
+  };
+  toUser?: {
+    id: string;
+    userName: string;
+    email: string;
+  };
+}
+
+export interface CreatePaymentRequest {
+  groupId: string;
+  toUserId: string;
+  amount: number;
+  note?: string;
+}
+
+export interface CreatePaymentResponse {
+  message: string;
+  payment: Payment;
+}
+
+export interface GetPaymentsResponse {
+  payments: Payment[];
+}

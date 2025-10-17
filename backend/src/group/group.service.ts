@@ -240,6 +240,11 @@ export class GroupService {
             },
           },
         },
+        payments: {
+          where: {
+            status: 'CONFIRMED',
+          },
+        },
       },
     });
 
@@ -272,7 +277,20 @@ export class GroupService {
     // Calculate balances for each member
     const balances: MemberBalance[] = group.members.map((member) => {
       const totalPaid = memberPaidMap.get(member.userId) || 0;
-      const balance = totalPaid - fairSharePerPerson;
+      let balance = totalPaid - fairSharePerPerson;
+
+      // Adjust balance based on payments
+      const paidOut = group.payments
+        .filter((p) => p.fromUserId === member.userId)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const receivedIn = group.payments
+        .filter((p) => p.toUserId === member.userId)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      // Paying increases your balance (reduces debt)
+      // Receiving decreases your balance (reduces credit)
+      balance = balance + paidOut - receivedIn;
 
       return {
         userId: member.userId,

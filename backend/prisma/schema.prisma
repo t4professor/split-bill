@@ -31,6 +31,8 @@ model User {
   groupsCreated GroupMember[] @relation("UserGroups")
   createdGroups Group[]       @relation("GroupCreator")
   expenses      Expense[]     @relation("UserExpenses")
+  paymentsFrom  Payment[]     @relation("PaymentsFrom")
+  paymentsTo    Payment[]     @relation("PaymentsTo")
 }
 
 model Group {
@@ -46,6 +48,7 @@ model Group {
   // Relations
   members     GroupMember[]
   expenses    Expense[]
+  payments    Payment[]
 }
 
 model GroupMember {
@@ -71,7 +74,34 @@ model Expense {
   updatedAt   DateTime @updatedAt
 }
 
+model Payment {
+  id          String        @id @default(uuid())
+  groupId     String
+  fromUserId  String
+  toUserId    String
+  amount      Float
+  note        String?
+  status      PaymentStatus @default(CONFIRMED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  group       Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromUser    User          @relation("PaymentsFrom", fields: [fromUserId], references: [id])
+  toUser      User          @relation("PaymentsTo", fields: [toUserId], references: [id])
+
+  @@index([groupId])
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
 enum Role {
   USER
   ADMIN
+}
+
+enum PaymentStatus {
+  CONFIRMED
+  PENDING
+  CANCELLED
 }
