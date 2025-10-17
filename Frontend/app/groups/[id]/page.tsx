@@ -109,8 +109,10 @@ export default function GroupDetailPage() {
         // Load expenses
         try {
           const expensesResponse = await groupApi.getGroupExpenses(groupId);
-          // Ensure we always have an array
-          setExpenses(Array.isArray(expensesResponse) ? expensesResponse : []);
+          const expenseList = Array.isArray(expensesResponse)
+            ? expensesResponse
+            : (expensesResponse as any)?.expenses || [];
+          setExpenses(expenseList);
         } catch (expensesError) {
           console.error("Failed to load group expenses", expensesError);
           setExpenses([]);
@@ -205,7 +207,7 @@ export default function GroupDetailPage() {
       setIsAddingMember(true);
       setError(null);
       await groupApi.addMember(groupId, {
-        userId: memberUserId.trim(),
+        userEmailOrUsername: memberUserId.trim(),
       });
 
       // Reset form
@@ -379,19 +381,15 @@ export default function GroupDetailPage() {
               >
                 <div className="space-y-1">
                   <label className="text-sm font-medium">
-                    User ID của thành viên
+                    Username/Email của người dùng
                   </label>
                   <Input
                     required
                     value={memberUserId}
                     onChange={(e) => setMemberUserId(e.target.value)}
-                    placeholder="Nhập UUID của user (ví dụ: 123e4567-e89b-12d3-a456-426614174000)"
+                    placeholder="Nhập email/username của user (ví dụ: JustTesting/JustTesting@example.com)"
                     disabled={isAddingMember}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Lưu ý: Hiện tại cần nhập UUID của user. Trong tương lai sẽ
-                    có chức năng tìm kiếm user theo email/username.
-                  </p>
                 </div>
                 <Button
                   type="submit"

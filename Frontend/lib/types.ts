@@ -114,7 +114,7 @@ export interface CreateGroupRequest {
 }
 
 export interface AddMemberRequest {
-  userId: string;
+  userEmailOrUsername: string;
 }
 
 export interface JoinGroupRequest {
