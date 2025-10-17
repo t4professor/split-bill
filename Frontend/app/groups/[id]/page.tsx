@@ -21,6 +21,7 @@ import {
   ArrowRight,
   AlertCircle,
   ArrowLeft,
+  Trash2,
 } from "lucide-react";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,7 +58,7 @@ const getInitials = (value?: string | null): string => {
 export default function GroupDetailPage() {
   const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const groupId = Array.isArray(params?.id)
     ? params.id[0] ?? ""
@@ -75,6 +76,7 @@ export default function GroupDetailPage() {
   const [newExpenseDescription, setNewExpenseDescription] = useState("");
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
   const [isCreatingExpense, setIsCreatingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
 
   // Add member state
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
@@ -192,6 +194,26 @@ export default function GroupDetailPage() {
       alert(message);
     } finally {
       setIsCreatingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm("Bạn có chắc muốn xóa chi tiêu này?")) {
+      return;
+    }
+
+    setDeletingExpenseId(expenseId);
+    try {
+      await expenseApi.deleteExpense(expenseId);
+      // Reload data to reflect the deletion
+      await loadData("refresh");
+    } catch (error) {
+      console.error("Failed to delete expense", error);
+      const message =
+        error instanceof Error ? error.message : "Không thể xóa chi tiêu.";
+      alert(message);
+    } finally {
+      setDeletingExpenseId(null);
     }
   };
 
@@ -554,9 +576,26 @@ export default function GroupDetailPage() {
                       {expense.paidBy?.email})
                     </p>
                   </div>
-                  <p className="font-semibold text-primary">
-                    {formatCurrency(expense.amount)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-primary">
+                      {formatCurrency(expense.amount)}
+                    </p>
+                    {user?.id === expense.paidById && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteExpense(expense.id)}
+                        disabled={deletingExpenseId === expense.id}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        {deletingExpenseId === expense.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))
             )}

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 
@@ -94,5 +94,36 @@ export class ExpenseService {
     });
 
     return { expenses };
+  }
+
+  // Delete an expense (owner only)
+  async deleteExpense(userId: string, expenseId: string) {
+    // Check if expense exists
+    const expense = await this.prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: {
+        group: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!expense) {
+      throw new NotFoundException('Expense not found');
+    }
+
+    // Check if user is the owner of the expense
+    if (expense.paidById !== userId) {
+      throw new ForbiddenException('Only the expense owner can delete this expense');
+    }
+
+    // Delete the expense
+    await this.prisma.expense.delete({
+      where: { id: expenseId },
+    });
+
+    return { message: 'Expense deleted successfully' };
   }
 }
