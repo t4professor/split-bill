@@ -22,13 +22,15 @@ const navItems = [
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
 
   const handleLogout = () => {
     logout();
     router.push("/login");
   };
-
+  if (!isAuthenticated || !user) {
+    return null;
+  }
   return (
     <>
       {/* Overlay */}
