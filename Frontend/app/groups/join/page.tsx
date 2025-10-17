@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, ArrowLeft, Users } from "lucide-react";
@@ -32,7 +38,6 @@ export default function JoinGroupPage() {
       setError(null);
       const response = await groupApi.joinGroupByCode({ inviteCode: code });
 
-      // Redirect to the group detail page
       router.push(`/groups/${response.group.id}`);
     } catch (err) {
       console.error("Failed to join group:", err);
@@ -72,7 +77,9 @@ export default function JoinGroupPage() {
             <form onSubmit={handleJoinGroup} className="space-y-4">
               {error && (
                 <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
-                  <p className="text-sm text-destructive text-center">{error}</p>
+                  <p className="text-sm text-destructive text-center">
+                    {error}
+                  </p>
                 </div>
               )}
 
@@ -95,7 +102,12 @@ export default function JoinGroupPage() {
                 </p>
               </div>
 
-              <Button type="submit" className="w-full" size="lg" disabled={isJoining}>
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                disabled={isJoining}
+              >
                 {isJoining ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -113,13 +125,8 @@ export default function JoinGroupPage() {
         </Card>
 
         <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground mb-2">
-            Chưa có mã mời?
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => router.push("/groups")}
-          >
+          <p className="text-sm text-muted-foreground mb-2">Chưa có mã mời?</p>
+          <Button variant="outline" onClick={() => router.push("/groups")}>
             Quay lại danh sách nhóm
           </Button>
         </div>
