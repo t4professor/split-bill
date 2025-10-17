@@ -173,26 +173,32 @@ export class GroupService {
       throw new BadRequestException('You are not a member of this group');
     }
 
-    // Check if user to add exists
-    const userToAdd = await this.prisma.user.findUnique({
-      where: { id: data.userId },
-    });
+    // Validate input: require the single field
+    if (!data.userEmailOrUsername) {
+      throw new BadRequestException('Please provide userEmailOrUsername to add');
+    }
+
+    // Find the user to add by email first, then by username
+    let userToAdd = await this.prisma.user.findUnique({ where: { email: data.userEmailOrUsername } });
+    if (!userToAdd) {
+      userToAdd = await this.prisma.user.findUnique({ where: { userName: data.userEmailOrUsername } });
+    }
 
     if (!userToAdd) {
       throw new NotFoundException('User not found');
     }
 
     // Check if user is already a member
-    const isAlreadyMember = group.members.some((m) => m.userId === data.userId);
+    const isAlreadyMember = group.members.some((m) => m.userId === userToAdd.id);
     if (isAlreadyMember) {
       throw new BadRequestException('User is already a member of this group');
     }
 
-    // Add member
+    // Add member using found user's id
     const member = await this.prisma.groupMember.create({
       data: {
         groupId: groupId,
-        userId: data.userId,
+        userId: userToAdd.id,
       },
       include: {
         user: {
