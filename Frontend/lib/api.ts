@@ -262,6 +262,13 @@ export const expenseApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Delete an expense (owner only)
+  async deleteExpense(expenseId: string): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>(`/expenses/${expenseId}`, {
+      method: "DELETE",
+    });
+  },
 };
 
 // Token management utilities
