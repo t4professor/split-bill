@@ -48,7 +48,7 @@ const QUICK_ACTIONS = [
     icon: Plus,
     label: "Tạo nhóm mới",
     description: "Bắt đầu chia bill với bạn bè",
-    href: "/groups/new",
+    href: "/groups?action=create",
     color: "text-blue-600",
     bgColor: "bg-blue-50",
   },
@@ -83,7 +83,7 @@ const formatRelativeTime = (timestamp: string): string => {
   if (diffMins < 60) return `${diffMins} phút trước`;
   if (diffHours < 24) return `${diffHours} giờ trước`;
   if (diffDays < 7) return `${diffDays} ngày trước`;
-  
+
   return date.toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -96,7 +96,9 @@ export default function HomePage() {
   const { isAuthenticated, user } = useAuth();
 
   const [groups, setGroups] = useState<GroupWithExpenses[]>([]);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>(
+    []
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalGroups: 0,
@@ -156,7 +158,10 @@ export default function HomePage() {
               recentExpenses,
             } as GroupWithExpenses;
           } catch (error) {
-            console.error(`Failed to load expenses for group ${group.id}`, error);
+            console.error(
+              `Failed to load expenses for group ${group.id}`,
+              error
+            );
             return {
               ...group,
               totalExpenses: 0,
@@ -225,7 +230,9 @@ export default function HomePage() {
       <MainLayout title="Trang chủ">
         <div className="flex flex-col items-center justify-center py-12">
           <Users className="mb-4 h-16 w-16 text-muted-foreground" />
-          <h2 className="mb-2 text-xl font-semibold">Chào mừng đến Split Bill</h2>
+          <h2 className="mb-2 text-xl font-semibold">
+            Chào mừng đến Split Bill
+          </h2>
           <p className="mb-6 text-center text-muted-foreground">
             Vui lòng đăng nhập để bắt đầu quản lý chi tiêu nhóm
           </p>
@@ -307,7 +314,9 @@ export default function HomePage() {
                   <Receipt className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalExpenses}</div>
+                  <div className="text-2xl font-bold">
+                    {stats.totalExpenses}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Khoản chi tiêu
                   </p>
@@ -325,9 +334,7 @@ export default function HomePage() {
                   <div className="text-2xl font-bold">
                     {formatCurrency(stats.totalAmount)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Tổng chi tiêu
-                  </p>
+                  <p className="text-xs text-muted-foreground">Tổng chi tiêu</p>
                 </CardContent>
               </Card>
             </div>
@@ -374,7 +381,9 @@ export default function HomePage() {
                           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{activity.paidBy}</span>
                             <span>•</span>
-                            <span>{formatRelativeTime(activity.timestamp)}</span>
+                            <span>
+                              {formatRelativeTime(activity.timestamp)}
+                            </span>
                           </div>
                         </div>
                         <div className="text-right">
